@@ -6,11 +6,19 @@ project Tests is
    for Exec_Dir use "bin";
    for Create_Missing_Dirs use "True";
    for Main use ("tests.adb");
+
    package Compiler is
       for Default_Switches ("Ada") use
-        ("-gnat2022", "-gnata", "-gnatwa", "-gnatwe", "-gnatVa", "-gnatyg", "-gnatyM100", "-g", "-O2");
+        ("-gnat2022", "-gnata", "-gnatwa", "-gnatwe", "-gnatVa", "-gnatyg", "-gnaty-d", "-gnatyM100", "-g", "-O2");
    end Compiler;
+
    package Binder is
       for Switches ("Ada") use ("-Es");
    end Binder;
+
+   package Linker is
+      for Linker_Options use
+        ("-LC:/ffmpeg/lib",
+         "-lavformat");
+   end Linker;
 end Tests;

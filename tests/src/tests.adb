@@ -2,10 +2,13 @@
 
 with Ada.Command_Line;
 with Ada.Text_IO;         use Ada.Text_IO;
+with FFmpeg.Avformat;
+with FFmpeg.Version;
 with Framewise;           use Framewise;
 with Framewise.Commands;  use Framewise.Commands;
 with Framewise.Session;
 with Framewise.Timeline;  use Framewise.Timeline;
+with Interfaces.C;
 
 procedure Tests is
 
@@ -16,6 +19,7 @@ procedure Tests is
    procedure Test_Timeline;
    procedure Test_Commands;
    procedure Test_Session;
+   procedure Test_FFmpeg;
    function Sec (S : String) return Time;
 
    procedure Check (Name : String; Cond : Boolean) is
@@ -196,11 +200,37 @@ procedure Tests is
       Check ("proxy unknown source", not R.Ok and History_Length (S) = 2);
    end Test_Session;
 
+   procedure Test_FFmpeg is
+      use type Interfaces.C.unsigned;
+
+      Raw : constant Interfaces.C.unsigned :=
+        FFmpeg.Avformat.Version;
+
+      Major : constant Natural := FFmpeg.Version.Get_Major;
+      Minor : constant Natural := FFmpeg.Version.Get_Minor;
+      Micro : constant Natural := FFmpeg.Version.Get_Micro;
+
+      Reconstructed : constant Natural :=
+        Major * 65_536 + Minor * 256 + Micro;
+   begin
+      Put_Line ("FFmpeg libavformat version: "
+                & Major'Image & "."
+                & Minor'Image & "."
+                & Micro'Image);
+
+      Check ("FFmpeg version is valid", Raw /= 0);
+
+      Check ("FFmpeg version components match",
+             Interfaces.C.unsigned (Reconstructed) = Raw);
+   end Test_FFmpeg;
+
 begin
    Test_Time;
    Test_Timeline;
    Test_Commands;
    Test_Session;
+   Test_FFmpeg;
+
    New_Line;
    if Failures = 0 then
       Put_Line ("all tests passed");
