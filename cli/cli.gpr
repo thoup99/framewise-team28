@@ -8,7 +8,15 @@ project Cli is
    for Main use ("framewise_cli.adb");
    package Compiler is
       for Default_Switches ("Ada") use
-        ("-gnat2022", "-gnata", "-gnatwa", "-gnatwe", "-gnatVa", "-gnatyg", "-gnatyM100", "-g", "-O2");
+        ("-gnat2022", 
+         "-gnata", 
+         "-gnatwa", 
+         --"-gnatwe", 
+         "-gnatVa", 
+         "-gnatyg", 
+         "-gnatyM100", 
+         "-g", 
+         "-O2");
    end Compiler;
    package Binder is
       for Switches ("Ada") use ("-Es");

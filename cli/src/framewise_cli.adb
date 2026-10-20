@@ -14,25 +14,30 @@
 
 with Ada.Command_Line; use Ada.Command_Line;
 with Ada.Text_IO;      use Ada.Text_IO;
-with Framewise.Session;    use Framewise.Session;
+with Framewise.Session;    
+
+with FFmpeg.Version;
 
 procedure Framewise_CLI is
-   S        : Session;
-   R        : Response;
+   package FS renames Framewise.Session;
+
+   S        : FS.Session;
+   R        : FS.Response;
    Failures : Natural := 0;
    I        : Positive := 1;
 
-   procedure Run (Line : String);
    procedure Run (Line : String) is
    begin
-      Execute (S, Line, R);
-      Put_Line (Image (R));
+      FS.Execute (S, Line, R);
+      Put_Line (FS.Image (R));
       if not R.Ok then
          Failures := Failures + 1;
       end if;
    end Run;
 
 begin
+   Put_Line (FFmpeg.Version.Version);
+
    while I <= Argument_Count loop
       if Argument (I) = "-c" and then I < Argument_Count then
          Run (Argument (I + 1));

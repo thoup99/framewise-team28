@@ -6,6 +6,17 @@ text. An edit engine you script, and a GUI that is a script generator.
 GNAT Academic Program capstone project. Proposal title: *Framewise:
 a non-linear video editor in Ada*.
 
+## Dependencies
+
+### Linux
+You will need the folowing:
+```
+sudo apt install libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
+```
+
+### Windows
+TODO
+
 ## What it is
 
 ```
