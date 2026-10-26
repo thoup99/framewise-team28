@@ -1,0 +1,21 @@
+name = "framewise_ui"
+description = "Non-linear video editing with a proven timeline kernel"
+version = "0.1.0-dev"
+authors = ["Olivier Henley"]
+maintainers = ["Olivier Henley <henley@adacore.com>"]
+maintainers-logins = ["ohenley"]
+licenses = "Apache-2.0"
+executables = ["framewise_ui"]
+project-files = ["ui.gpr"]
+
+[[depends-on]]
+bedrock = "*"
+framewise = "*"
+adi2 = "*"
+
+[[pins]]
+framewise = { path = ".." }
+
+[[pins]]
+bedrock = { url = "https://github.com/GNAT-Academic-Program/bedrock.git" }
+adi2 = { url = "https://github.com/ovenpasta/adi2.git", commit = "a6886c9caa1549c1af701bf300c6bfd57e111646" }
