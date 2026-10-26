@@ -7,12 +7,11 @@
 --
 --  No I/O and no heap allocation. Callers must separately verify that any
 --  payload bytes they plan to examine are present in their input buffer.
-with Framewise.ISOBMFF;
 
 package Framewise.ISOBMFF.Boxes with SPARK_Mode is
 
    type Box_Header is record
-      Kind          : String (1 .. 4) := (others => ' ');
+      Kind          : String (1 .. 4) := [others => ' '];
       Box_First     : Natural := 0;
       Box_Last      : Natural := 0;
       Header_Length : Natural := 0;
@@ -22,20 +21,20 @@ package Framewise.ISOBMFF.Boxes with SPARK_Mode is
 
    procedure Read_Box
      (Data      : Byte_Array;
-      At        : Positive;
+      Position  : Positive;
       File_Size : Natural;
       Header    : out Box_Header;
       Ok        : out Boolean)
      with Post =>
        (if Ok then
-          Header.Box_First = At
+          Header.Box_First = Position
           and then Header.Box_Last <= File_Size
-          and then Header.Box_Last >= At
+          and then Header.Box_Last >= Position
           and then Header.Header_Length in 8 | 16
           and then Header.Payload_Size =
             Header.Box_Last - Header.Box_First + 1 - Header.Header_Length
           and then (if Header.Payload_Size > 0 then
-                      Header.Payload_First = At + Header.Header_Length));
+                      Header.Payload_First = Position + Header.Header_Length));
    --  A size of 0 means through File_Size (not through Data'Last).
    --  A size of 1 introduces an unsigned 64-bit largesize. Values that
    --  do not fit Natural are intentionally rejected, as all existing

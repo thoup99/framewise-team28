@@ -27,6 +27,13 @@ with Framewise.Session;
 procedure Framewise_UI is
    use type Adi.SDL.Events.SDL_Scancode;
 
+   --  Make Adi2 widget conversion operators visible
+   use type Adi.Widget.Box.Box_Handle;
+   use type Adi.Widget.Button.Button_Handle;
+   use type Adi.Widget.Label.Label_Handle;
+   use type Adi.Widget.Text_Editor.Text_Editor_Handle;
+   use type Adi.Widget.Text_Input.Text_Input_Handle;
+
    package FS renames Framewise.Session;
    package US renames Ada.Strings.Unbounded;
 
@@ -97,9 +104,9 @@ procedure Framewise_UI is
       --  the CLI and agents use, and no local copy of the sequence.
       FS.Execute (Editor, Line, Reply);
       declare
-         Entry : constant US.Unbounded_String :=
-           US.To_Unbounded_String ("> " & Line & Ada.Characters.Latin_1.LF
-             & FS.Image (Reply));
+         Log_Item : constant US.Unbounded_String :=
+         US.To_Unbounded_String ("> " & Line & Ada.Characters.Latin_1.LF
+            & FS.Image (Reply));
       begin
          if Count = Max_Recent then
             for I in 1 .. Max_Recent - 1 loop
@@ -108,7 +115,7 @@ procedure Framewise_UI is
          else
             Count := Count + 1;
          end if;
-         Recent (Count) := Entry;
+         Recent (Count) := Log_Item;
       end;
 
       Adi.Widget.Label.Set_Text (Status, FS.Image (Reply));
