@@ -8,3 +8,4 @@ config/
 gnatprove/
 *.mp4
 *.wav
+*.proxy.mov

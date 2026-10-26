@@ -98,8 +98,11 @@ package body Framewise.Timeline with SPARK_Mode is
          return;
       end if;
       for I in S.Sources'Range loop
+         --  P1: source additions cannot invalidate existing track clips.
+         pragma Loop_Invariant (Well_Formed (S));
          if not S.Sources (I).Used then
             S.Sources (I) := (Used => True, N => N, File => File, Length => Length, Kind => Kind);
+            pragma Assert (Well_Formed (S));
             Ok := True;
             return;
          end if;
@@ -117,11 +120,14 @@ package body Framewise.Timeline with SPARK_Mode is
          return;
       end if;
       for T in S.Tracks'Range loop
+         --  P1: unmodified tracks keep the original well-formed state.
+         pragma Loop_Invariant (Well_Formed (S));
          if not S.Tracks (T).Used then
             S.Tracks (T).Used := True;
             S.Tracks (T).N := N;
             S.Tracks (T).Kind := Kind;
             S.Tracks (T).Count := 0;
+            pragma Assert (Well_Formed (S));
             Ok := True;
             return;
          end if;

@@ -17,6 +17,8 @@ jobs:
           cd tests
           alr -n build
           ./bin/tests
+          ./bin/p1_foundation_tests
+          ./bin/box_reader_tests
       - name: CLI runs the example and round-trips the document
         run: |
           cd cli
