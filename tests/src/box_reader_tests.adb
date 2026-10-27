@@ -13,6 +13,8 @@ procedure Box_Reader_Tests is
    H        : Box_Header;
    Ok       : Boolean;
 
+   procedure Check (Label_Text : String; Condition : Boolean);
+
    procedure Check (Label_Text : String; Condition : Boolean) is
    begin
       Put_Line ((if Condition then "PASS " else "FAIL ") & Label_Text);

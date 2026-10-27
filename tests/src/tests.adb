@@ -204,7 +204,7 @@ procedure Tests is
       use type Interfaces.C.unsigned;
 
       Raw : constant Interfaces.C.unsigned :=
-        FFmpeg.Avformat.Version;
+        FFmpeg.Avformat.Avformat_Version;
 
       Major : constant Natural := FFmpeg.Version.Get_Major;
       Minor : constant Natural := FFmpeg.Version.Get_Minor;

@@ -23,6 +23,9 @@ procedure JPEG_Header_Tests is
       16#02#, 16#11#, 16#01#,
       16#03#, 16#11#, 16#01#];
 
+   procedure Check (Message : String; Condition : Boolean);
+   procedure Check_File (Filename : String);
+
    procedure Check (Message : String; Condition : Boolean) is
    begin
       Put_Line ((if Condition then "PASS " else "FAIL ") & Message);
@@ -33,6 +36,7 @@ procedure JPEG_Header_Tests is
 
    procedure Check_File (Filename : String) is
       use Ada.Streams;
+      use type Ada.Streams.Stream_IO.Count;
       File   : Ada.Streams.Stream_IO.File_Type;
    begin
       Ada.Streams.Stream_IO.Open (File, Ada.Streams.Stream_IO.In_File, Filename);
@@ -131,12 +135,12 @@ begin
 
       Wrong := Sample;
       Wrong (16) := 16#07#;
-      Wrong (17) := 16#81#; -- width 1921
+      Wrong (17) := 16#81#;  --  width 1921
       Read_Header (Wrong, H, Ok);
       Check ("width exceeding Max_Width rejected", not Ok);
 
       Wrong := Sample;
-      Wrong (12) := 16#10#; -- bad SOF0 length
+      Wrong (12) := 16#10#;  --  bad SOF0 length
       Read_Header (Wrong, H, Ok);
       Check ("inconsistent SOF0 size rejected", not Ok);
 

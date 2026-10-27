@@ -15,6 +15,8 @@ procedure P1_Foundation_Tests is
    Ok       : Boolean;
    Failures : Natural := 0;
 
+   procedure Check (Label_Text : String; Condition : Boolean);
+
    procedure Check (Label_Text : String; Condition : Boolean) is
    begin
       Put_Line ((if Condition then "PASS " else "FAIL ") & Label_Text);
