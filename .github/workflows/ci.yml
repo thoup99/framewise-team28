@@ -10,6 +10,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: alire-project/setup-alire@v4
+      - name: Install FFmpeg dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ffmpeg \
+            libavformat-dev \
+            libavcodec-dev \
+            libavutil-dev \
+            libswscale-dev \
+            libswresample-dev
       - name: Build library
         run: alr -n build
       - name: Tests
