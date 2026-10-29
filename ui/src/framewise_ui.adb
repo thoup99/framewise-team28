@@ -23,11 +23,10 @@ with Adi.Widget_Styles; use Adi.Widget_Styles;
 with Adi.Window;        use Adi.Window;
 
 with Framewise;
-with Framewise.Commands;
 with Framewise.Session;
-with Framewise.Timeline;
 
 procedure Framewise_UI is
+   use type Framewise.Time;
    use type Adi.SDL.Events.SDL_Scancode;
 
    --  Make Adi2 widget conversion operators visible
@@ -101,36 +100,36 @@ procedure Framewise_UI is
    end Refresh_Log;
 
    procedure Refresh_Timeline is
-      Seq : constant Framewise.Timeline.Sequence := FS.Sequence_Of (Editor);
+      Seq : constant FS.Sequence_View := FS.Sequence_Of (Editor);
       Text : US.Unbounded_String := US.To_Unbounded_String ("Timeline");
    begin
-      for T in Framewise.Timeline.Track_Table'Range loop
+      for T in Seq.Tracks'Range loop
          if Seq.Tracks (T).Used then
             US.Append
+            (Text,
+               Ada.Characters.Latin_1.LF &
+               Framewise.Image (Seq.Tracks (T).N));
+
+            for I in 1 .. Seq.Tracks (T).Count loop
+               US.Append
                (Text,
                   Ada.Characters.Latin_1.LF &
-                  Framewise.Image (Seq.Tracks (T).N));
+                  " " & Framewise.Image (Seq.Tracks (T).Clips (I).N) &
+                  " " &
+                  FS.Image_Time
+                    (Seq.Tracks (T).Clips (I).Start) &
+                  " - " &
+                 FS.Image_Time
+                   (Seq.Tracks (T).Clips (I).Start +
+                    (Seq.Tracks (T).Clips (I).Src_Out -
+                     Seq.Tracks (T).Clips (I).Src_In)));
+            end loop;
+         end if;
+      end loop;
 
-               for I in 1 .. Seq.Tracks (T).Count loop
-                  declare
-                     C : constant Framewise.Timeline.Clip :=
-                        Seq.Tracks (T).Clips (I);
-                  begin
-                     US.Append
-                        (Text,
-                        Ada.Characters.Latin_1.LF &
-                        " " & Framewise.Image (C.N) &
-                        " " & Framewise.Commands.Image_Time (C.Start) &
-                        " - " & Framewise.Commands.Image_Time
-                        (Framewise.Timeline.Ends (C)));
-                  end;
-               end loop;
-            end if;
-         end loop;
-
-         Adi.Widget.Text_Editor.Set_Text 
-            (Timeline_View, US.To_String (Text));
-      end Refresh_Timeline;
+      Adi.Widget.Text_Editor.Set_Text
+      (Timeline_View, US.To_String (Text));
+   end Refresh_Timeline;
 
    procedure Submit is
       use Ada.Strings.Fixed;
