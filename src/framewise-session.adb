@@ -199,7 +199,8 @@ package body Framewise.Session is
    function Proxy_Command (Source : String) return String is
      ("ffmpeg -y -hide_banner -loglevel error -i " & Source
       & " -vf scale=-2:540 -c:v mjpeg -q:v 3 -pix_fmt yuvj420p"
-      & " -c:a pcm_s16le -ar 48000 " & Source & ".proxy.mov");
+      & " -c:a pcm_s16le -ar 48000 -movflags +faststart "
+      & Source & ".proxy.mov");
 
    procedure Do_Proxy (S : Session; N : Name; R : out Response) is
       Sr     : constant Source_Id := Find_Source (S.Seq, N);

@@ -10,6 +10,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: alire-project/setup-alire@v4
+      - name: Install FFmpeg dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ffmpeg \
+            libavformat-dev \
+            libavcodec-dev \
+            libavutil-dev \
+            libswscale-dev \
+            libswresample-dev
       - name: Build library
         run: alr -n build
       - name: Tests
@@ -17,6 +27,9 @@ jobs:
           cd tests
           alr -n build
           ./bin/tests
+          ./bin/p1_foundation_tests
+          ./bin/box_reader_tests
+          ./bin/jpeg_header_tests
       - name: CLI runs the example and round-trips the document
         run: |
           cd cli
@@ -33,9 +46,17 @@ jobs:
           ffmpeg -loglevel error -y -f lavfi -i sine=frequency=440 -t 60 music.wav
           ../cli/bin/framewise_cli -c "load cut.fw" -c "export out.mp4"
           ffprobe -v error -show_entries format=duration -of csv=p=0 out.mp4 | grep -q '^22\.'
+      - name: JPEG reference frame and header
+        run: |
+          cd examples
+          ../cli/bin/framewise_cli -c "load cut.fw" -c "proxy take1"
+          ffmpeg -hide_banner -loglevel error -y -i take1.mp4.proxy.mov -frames:v 1 -c:v copy /tmp/framewise-ref.jpg
+          ffmpeg -hide_banner -loglevel error -y -i /tmp/framewise-ref.jpg -frames:v 1 -pix_fmt rgba -f rawvideo /tmp/framewise-ref.rgba
+          python3 ../scripts/jpeg_reference.py /tmp/framewise-ref.jpg /tmp/framewise-ref.rgba
+          ../tests/bin/jpeg_header_tests /tmp/framewise-ref.jpg
       - name: ui/ never reaches below Framewise.Session
         run: |
-          ! grep -rEi 'with +Framewise\.(Timeline|Plan|Decode|Commands)' ui/ --include='*.ad?' 
+          ! grep -rEi 'with +Framewise\.(Timeline|Plan|Decode|Commands)' ui/ --include='*.ad?'
       - name: SPARK flow analysis
         run: |
           alr -n with gnatprove
