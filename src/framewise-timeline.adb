@@ -1,4 +1,4 @@
-package body Framewise.Timeline with SPARK_Mode is 
+package body Framewise.Timeline with SPARK_Mode is
 
    -----------------
    -- Find_Source --

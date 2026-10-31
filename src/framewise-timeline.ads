@@ -123,7 +123,7 @@ package Framewise.Timeline with SPARK_Mode is
         and then I in 1 .. S.Tracks (T).Count)
        --  Not found: both outputs are 0.
        or else (T = 0 and I = 0);
-   --  T = 0 when absent. 
+   --  T = 0 when absent.
 
    function Track_End (S : Sequence; T : Track_Id) return Time
      with Pre => T in 1 .. Max_Tracks and then Well_Formed (S);
