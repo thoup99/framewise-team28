@@ -111,8 +111,19 @@ package Framewise.Timeline with SPARK_Mode is
    function Find_Source (S : Sequence; N : Name) return Source_Id;
    function Find_Track  (S : Sequence; N : Name) return Track_Id;
    procedure Find_Clip
-     (S : Sequence; N : Name; T : out Track_Id; I : out Clip_Index);
-   --  T = 0 when absent.
+     (S : Sequence; N : Name; T : out Track_Id; I : out Clip_Index)
+     --  P1: promise callers what Find_Clip returns, so the prover can
+     --  use T and I safely (Delete, Move, Trim, Split all rely on it).
+     with Post =>
+       --  Found: T is a real track number...
+       (T in 1 .. Max_Tracks
+        --  ...that track is in use (so Well_Formed covers it)...
+        and then S.Tracks (T).Used
+        --  ...and I points to a clip that actually exists on it.
+        and then I in 1 .. S.Tracks (T).Count)
+       --  Not found: both outputs are 0.
+       or else (T = 0 and I = 0);
+   --  T = 0 when absent. 
 
    function Track_End (S : Sequence; T : Track_Id) return Time
      with Pre => T in 1 .. Max_Tracks and then Well_Formed (S);

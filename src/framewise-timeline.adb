@@ -1,4 +1,4 @@
-package body Framewise.Timeline with SPARK_Mode is
+package body Framewise.Timeline with SPARK_Mode is 
 
    -----------------
    -- Find_Source --
@@ -152,7 +152,21 @@ package body Framewise.Timeline with SPARK_Mode is
      with Pre => Tr.Count < Max_Clips;
 
    procedure Remove_At (Tr : in out Track; I : Clip_Index)
-     with Pre => I in 1 .. Tr.Count;
+     --  I must be the index of an existing clip.
+     with Pre  => I in 1 .. Tr.Count,
+          --  P1: describe exactly what Remove_At does, so Delete can
+          --  prove the track is still sorted after the removal.
+          --  'Old = the value when Remove_At was called.
+          --  The track is still marked as used.
+          Post => Tr.Used = Tr.Used'Old
+                  --  One clip fewer.
+                  and then Tr.Count = Tr.Count'Old - 1
+                  --  Clips before I are unchanged.
+                  and then (for all K in 1 .. I - 1 =>
+                              Tr.Clips (K) = Tr.Clips'Old (K))
+                  --  Clips from I on are the old ones shifted left by one.
+                  and then (for all K in I .. Tr.Count =>
+                              Tr.Clips (K) = Tr.Clips'Old (K + 1));
 
    function Overlaps (Tr : Track; Start, Len : Time; Skip : Clip_Index) return Boolean
    is
@@ -191,9 +205,23 @@ package body Framewise.Timeline with SPARK_Mode is
 
    procedure Remove_At (Tr : in out Track; I : Clip_Index) is
    begin
+      --  Shift every clip after I one slot to the left, overwriting I.
       for J in I .. Tr.Count - 1 loop
          Tr.Clips (J) := Tr.Clips (J + 1);
+         --  P1: what is true after each pass of the loop.
+         --  'Loop_Entry = the value just before the loop started.
+         pragma Loop_Invariant
+           --  Clips before I: never touched.
+           ((for all K in 1 .. I - 1 =>
+               Tr.Clips (K) = Tr.Clips'Loop_Entry (K))
+            --  Clips I .. J: already shifted left by one.
+            and then (for all K in I .. J =>
+                        Tr.Clips (K) = Tr.Clips'Loop_Entry (K + 1))
+            --  Clips after J: not reached yet, still the originals.
+            and then (for all K in J + 1 .. Tr.Count =>
+                        Tr.Clips (K) = Tr.Clips'Loop_Entry (K)));
       end loop;
+      --  The last slot is now a stale copy; dropping Count hides it.
       Tr.Count := Tr.Count - 1;
    end Remove_At;
 
