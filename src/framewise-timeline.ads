@@ -109,7 +109,12 @@ package Framewise.Timeline with SPARK_Mode is
    ---------------------------------------------------------------------
 
    function Find_Source (S : Sequence; N : Name) return Source_Id;
-   function Find_Track  (S : Sequence; N : Name) return Track_Id;
+   function Find_Track  (S : Sequence; N : Name) return Track_Id
+     --  Postcondition: if a track is found (result /= 0), that track is
+     --  marked Used. Well_Formed only covers used tracks, so this lets
+     --  Place rely on the track's clips being valid before calling Overlaps.
+     with Post => (if Find_Track'Result /= 0
+                   then S.Tracks (Find_Track'Result).Used);
    procedure Find_Clip
      (S : Sequence; N : Name; T : out Track_Id; I : out Clip_Index)
      --  P1: promise callers what Find_Clip returns, so the prover can

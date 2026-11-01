@@ -146,10 +146,39 @@ package body Framewise.Timeline with SPARK_Mode is
                  and then (for all I in 1 .. Tr.Count =>
                              Tr.Clips (I).Src_In <= Tr.Clips (I).Src_Out
                              and then Tr.Clips (I).Start <= Time'Last / 2
-                             and then Tr.Clips (I).Src_Out <= Time'Last / 2);
+                             and then Tr.Clips (I).Src_Out <= Time'Last / 2),
+          --  Postcondition: the result is True exactly when some clip other
+          --  than Skip intersects [Start, Start + Len). Without this, a
+          --  caller that gets False learns nothing about the track.
+          Post => Overlaps'Result =
+                    (for some I in 1 .. Tr.Count =>
+                       I /= Skip
+                       and then Start < Ends (Tr.Clips (I))
+                       and then Tr.Clips (I).Start < Start + Len);
+
+   function Insert_Pos (Tr : Track; C : Clip) return Clip_Index
+     with Pre  => Tr.Count < Max_Clips,
+          --  Postcondition: the result is the first slot whose clip starts
+          --  after C (or Count + 1 if none does). Every clip before it
+          --  starts at or before C.
+          Post => Insert_Pos'Result in 1 .. Tr.Count + 1
+                  and then (for all K in 1 .. Insert_Pos'Result - 1 =>
+                              Tr.Clips (K).Start <= C.Start)
+                  and then (if Insert_Pos'Result <= Tr.Count
+                            then Tr.Clips (Insert_Pos'Result).Start > C.Start);
 
    procedure Insert_Sorted (Tr : in out Track; C : Clip)
-     with Pre => Tr.Count < Max_Clips;
+     with Pre  => Tr.Count < Max_Clips,
+          --  Postcondition: C is placed at Insert_Pos, clips before it are
+          --  unchanged, and clips after it are the old ones shifted right
+          --  by one. 'Old = the value when Insert_Sorted was called.
+          Post => Tr.Used = Tr.Used'Old
+                  and then Tr.Count = Tr.Count'Old + 1
+                  and then (for all K in 1 .. Insert_Pos (Tr'Old, C) - 1 =>
+                              Tr.Clips (K) = Tr.Clips'Old (K))
+                  and then Tr.Clips (Insert_Pos (Tr'Old, C)) = C
+                  and then (for all K in Insert_Pos (Tr'Old, C) + 1 .. Tr.Count =>
+                              Tr.Clips (K) = Tr.Clips'Old (K - 1));
 
    procedure Remove_At (Tr : in out Track; I : Clip_Index)
      --  I must be the index of an existing clip.
@@ -181,24 +210,51 @@ package body Framewise.Timeline with SPARK_Mode is
                end if;
             end;
          end if;
+         --  Every clip checked so far (1 .. I) is either Skip or does not
+         --  intersect the new window. If the loop finishes, that covers
+         --  every clip, which is what the postcondition needs for False.
+         pragma Loop_Invariant
+           (for all K in 1 .. I =>
+              K = Skip
+              or else not (Start < Ends (Tr.Clips (K))
+                           and then Tr.Clips (K).Start < Start + Len));
       end loop;
       return False;
    end Overlaps;
 
-   --  Insert C into Tr keeping clips sorted by Start. Caller has checked
-   --  no overlap and room.
-   procedure Insert_Sorted (Tr : in out Track; C : Clip) is
-      Pos : Clip_Index := Tr.Count + 1;
+   --  First slot whose clip starts after C, or Count + 1 if none does.
+   function Insert_Pos (Tr : Track; C : Clip) return Clip_Index is
    begin
       for I in 1 .. Tr.Count loop
          if Tr.Clips (I).Start > C.Start then
-            Pos := I;
-            exit;
+            return I;
          end if;
+         --  Every clip checked so far starts at or before C.
+         pragma Loop_Invariant
+           (for all K in 1 .. I => Tr.Clips (K).Start <= C.Start);
       end loop;
+      return Tr.Count + 1;
+   end Insert_Pos;
+
+   --  Insert C into Tr keeping clips sorted by Start. Caller has checked
+   --  no overlap and room.
+   procedure Insert_Sorted (Tr : in out Track; C : Clip) is
+      Pos : constant Clip_Index := Insert_Pos (Tr, C);
+   begin
+      --  Shift clips Pos .. Count one slot to the right, starting from the
+      --  end so nothing is overwritten before it is copied.
       for I in reverse Pos .. Tr.Count loop
          Tr.Clips (I + 1) := Tr.Clips (I);
+         --  'Loop_Entry = the value just before the loop started.
+         pragma Loop_Invariant
+           --  Clips before I: not reached yet, still the originals.
+           ((for all K in 1 .. I - 1 =>
+               Tr.Clips (K) = Tr.Clips'Loop_Entry (K))
+            --  Clips after I: already shifted right by one.
+            and then (for all K in I + 1 .. Tr.Count + 1 =>
+                        Tr.Clips (K) = Tr.Clips'Loop_Entry (K - 1)));
       end loop;
+      --  Slot Pos is now free (its old clip moved to Pos + 1).
       Tr.Clips (Pos) := C;
       Tr.Count := Tr.Count + 1;
    end Insert_Sorted;
