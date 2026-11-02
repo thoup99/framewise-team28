@@ -15,3 +15,6 @@ bedrock = "*"
 
 [[pins]]
 bedrock = { url = "https://github.com/GNAT-Academic-Program/bedrock.git" }
+
+[[depends-on]]
+gnatprove = "^16.1.0"

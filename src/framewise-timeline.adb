@@ -33,7 +33,7 @@ package body Framewise.Timeline with SPARK_Mode is
    ---------------
 
    procedure Find_Clip
-     (S : Sequence; N : Name; T : out Track_Id; I : out Clip_Index) is
+      (S : Sequence; N : Name; T : out Track_Id; I : out Clip_Index) is
    begin
       for TT in S.Tracks'Range loop
          if S.Tracks (TT).Used then
@@ -90,7 +90,7 @@ package body Framewise.Timeline with SPARK_Mode is
    ----------------
 
    procedure Add_Source
-     (S : in out Sequence; N : Name; File : Path; Length : Duration_T;
+      (S : in out Sequence; N : Name; File : Path; Length : Duration_T;
       Kind : Media_Kind; Ok : out Boolean) is
    begin
       Ok := False;
@@ -141,16 +141,16 @@ package body Framewise.Timeline with SPARK_Mode is
    --  True when a clip [Start, Start + Len) would overlap any clip on Tr
    --  other than slot Skip (0 = none).
    function Overlaps (Tr : Track; Start, Len : Time; Skip : Clip_Index) return Boolean
-     with Pre => Start <= Time'Last / 2 and then Len <= Time'Last / 2
-                 and then Tr.Count <= Max_Clips
-                 and then (for all I in 1 .. Tr.Count =>
-                             Tr.Clips (I).Src_In <= Tr.Clips (I).Src_Out
-                             and then Tr.Clips (I).Start <= Time'Last / 2
-                             and then Tr.Clips (I).Src_Out <= Time'Last / 2),
-          --  Postcondition: the result is True exactly when some clip other
-          --  than Skip intersects [Start, Start + Len). Without this, a
-          --  caller that gets False learns nothing about the track.
-          Post => Overlaps'Result =
+      with Pre => Start <= Time'Last / 2 and then Len <= Time'Last / 2
+                  and then Tr.Count <= Max_Clips
+                  and then (for all I in 1 .. Tr.Count =>
+                              Tr.Clips (I).Src_In <= Tr.Clips (I).Src_Out
+                              and then Tr.Clips (I).Start <= Time'Last / 2
+                              and then Tr.Clips (I).Src_Out <= Time'Last / 2),
+         --  Postcondition: the result is True exactly when some clip other
+         --  than Skip intersects [Start, Start + Len). Without this, a
+         --  caller that gets False learns nothing about the track.
+         Post => Overlaps'Result =
                     (for some I in 1 .. Tr.Count =>
                        I /= Skip
                        and then Start < Ends (Tr.Clips (I))
@@ -214,9 +214,9 @@ package body Framewise.Timeline with SPARK_Mode is
          --  intersect the new window. If the loop finishes, that covers
          --  every clip, which is what the postcondition needs for False.
          pragma Loop_Invariant
-           (for all K in 1 .. I =>
-              K = Skip
-              or else not (Start < Ends (Tr.Clips (K))
+            (for all K in 1 .. I =>
+               K = Skip
+               or else not (Start < Ends (Tr.Clips (K))
                            and then Tr.Clips (K).Start < Start + Len));
       end loop;
       return False;
@@ -231,7 +231,7 @@ package body Framewise.Timeline with SPARK_Mode is
          end if;
          --  Every clip checked so far starts at or before C.
          pragma Loop_Invariant
-           (for all K in 1 .. I => Tr.Clips (K).Start <= C.Start);
+            (for all K in 1 .. I => Tr.Clips (K).Start <= C.Start);
       end loop;
       return Tr.Count + 1;
    end Insert_Pos;
@@ -247,8 +247,8 @@ package body Framewise.Timeline with SPARK_Mode is
          Tr.Clips (I + 1) := Tr.Clips (I);
          --  'Loop_Entry = the value just before the loop started.
          pragma Loop_Invariant
-           --  Clips before I: not reached yet, still the originals.
-           ((for all K in 1 .. I - 1 =>
+            --  Clips before I: not reached yet, still the originals.
+            ((for all K in 1 .. I - 1 =>
                Tr.Clips (K) = Tr.Clips'Loop_Entry (K))
             --  Clips after I: already shifted right by one.
             and then (for all K in I + 1 .. Tr.Count + 1 =>
@@ -267,8 +267,8 @@ package body Framewise.Timeline with SPARK_Mode is
          --  P1: what is true after each pass of the loop.
          --  'Loop_Entry = the value just before the loop started.
          pragma Loop_Invariant
-           --  Clips before I: never touched.
-           ((for all K in 1 .. I - 1 =>
+            --  Clips before I: never touched.
+            ((for all K in 1 .. I - 1 =>
                Tr.Clips (K) = Tr.Clips'Loop_Entry (K))
             --  Clips I .. J: already shifted left by one.
             and then (for all K in I .. J =>
@@ -280,6 +280,35 @@ package body Framewise.Timeline with SPARK_Mode is
       --  The last slot is now a stale copy; dropping Count hides it.
       Tr.Count := Tr.Count - 1;
    end Remove_At;
+
+   --  Insert a new clip immediately after a known existing slot.
+   --  This helper makes the shifted array's frame condition explicit,
+   --  enabling Split to prove that no other clip was lost or changed.
+   procedure Insert_After (Tr : in out Track; I : Clip_Index; C : Clip)
+     with Pre => I in 1 .. Tr.Count and then Tr.Count < Max_Clips,
+         Post => Tr.Used = Tr.Used'Old
+                  and then Tr.Count = Tr.Count'Old + 1
+                  and then (for all K in 1 .. I =>
+                              Tr.Clips (K) = Tr.Clips'Old (K))
+                  and then Tr.Clips (I + 1) = C
+                  and then (for all K in I + 2 .. Tr.Count =>
+                              Tr.Clips (K) = Tr.Clips'Old (K - 1));
+
+   procedure Insert_After (Tr : in out Track; I : Clip_Index; C : Clip) is
+   begin
+      for J in reverse I + 1 .. Tr.Count loop
+         Tr.Clips (J + 1) := Tr.Clips (J);
+         pragma Loop_Invariant
+           (Tr.Count = Tr.Count'Loop_Entry
+            and then (for all K in 1 .. J - 1 =>
+                        Tr.Clips (K) = Tr.Clips'Loop_Entry (K))
+            and then (for all K in J + 1 .. Tr.Count + 1 =>
+                        Tr.Clips (K) = Tr.Clips'Loop_Entry (K - 1)));
+      end loop;
+
+      Tr.Clips (I + 1) := C;
+      Tr.Count := Tr.Count + 1;
+   end Insert_After;
 
    -----------
    -- Place --
@@ -381,32 +410,86 @@ package body Framewise.Timeline with SPARK_Mode is
       I  : Clip_Index;
       DT : Track_Id;
       DI : Clip_Index;
-      L, R : Clip;
-      Offset : Time;
+      Original : Clip;
+      L, R     : Clip;
+      Offset   : Time;
    begin
       Ok := False;
       Find_Clip (S, Clip_Name, T, I);
       if T = 0 then
          return;
       end if;
+
       Find_Clip (S, Right_Name, DT, DI);
       if DT /= 0 then
-         return;  --  right name taken
+         return;  --  Right-hand name is already in use.
       end if;
-      L := S.Tracks (T).Clips (I);
-      if Start <= L.Start or else Start >= Ends (L) then
-         return;  --  cut must be strictly inside
+
+      Original := S.Tracks (T).Clips (I);
+      pragma Assert (Clip_OK (S, Original));
+
+      --  A cut must be strictly inside the original window. The extra
+      --  upper bound ensures the new right clip satisfies Clip_OK.
+      if Start <= Original.Start
+        or else Start >= Ends (Original)
+        or else Start > Time'Last / 2
+      then
+         return;
       end if;
+
       if S.Tracks (T).Count = Max_Clips then
          return;
       end if;
-      Offset := Start - L.Start;
-      R := (N => Right_Name, Src => L.Src, Src_In => L.Src_In + Offset,
-            Src_Out => L.Src_Out, Start => Start);
-      L.Src_Out := L.Src_In + Offset;
-      --  L now ends exactly where R starts: Ends (L) = Start = R.Start. T3.
+
+      Offset := Start - Original.Start;
+      L := Original;
+      R :=
+         (N       => Right_Name,
+         Src     => Original.Src,
+         Src_In  => Original.Src_In + Offset,
+         Src_Out => Original.Src_Out,
+         Start   => Start);
+      L.Src_Out := Original.Src_In + Offset;
+
+      --  T3: the source windows form a lossless partition.
+      pragma Assert (Clip_OK (S, L));
+      pragma Assert (Clip_OK (S, R));
+      pragma Assert (L.Src_Out = R.Src_In);
+      pragma Assert (L.Src_In = Original.Src_In);
+      pragma Assert (R.Src_Out = Original.Src_Out);
+      pragma Assert (L.Src = Original.Src);
+      pragma Assert (R.Src = Original.Src);
+
+      --  T3: the placements touch, and total duration is unchanged.
+      pragma Assert (L.Start = Original.Start);
+      pragma Assert (Ends (L) = R.Start);
+      pragma Assert (Ends (R) = Ends (Original));
+
+      --  The original next clip remains after the right-hand piece.
+      pragma Assert
+        (if I < S.Tracks (T).Count then
+            Ends (R) <= S.Tracks (T).Clips (I + 1).Start);
+
+      --  Shortening a clip never introduces a new overlap.
       S.Tracks (T).Clips (I) := L;
-      Insert_Sorted (S.Tracks (T), R);
+      pragma Assert (Well_Formed (S));
+
+      --  The right piece belongs immediately after the left piece.
+      Insert_After (S.Tracks (T), I, R);
+
+      pragma Assert (S.Tracks (T).Clips (I) = L);
+      pragma Assert (S.Tracks (T).Clips (I + 1) = R);
+      pragma Assert
+        (S.Tracks (T).Clips (I).Src_Out =
+         S.Tracks (T).Clips (I + 1).Src_In);
+      pragma Assert
+        (Ends (S.Tracks (T).Clips (I)) =
+         S.Tracks (T).Clips (I + 1).Start);
+      pragma Assert
+        (Ends (S.Tracks (T).Clips (I + 1)) = Ends (Original));
+
+      --  T2: all clips and track ordering still satisfy the invariant.
+      pragma Assert (Well_Formed (S));
       Ok := True;
    end Split;
 
