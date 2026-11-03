@@ -29,6 +29,7 @@ jobs:
           ./bin/tests
           ./bin/p1_foundation_tests
           ./bin/box_reader_tests
+          ./bin/table_reader_tests
           ./bin/jpeg_header_tests
       - name: CLI runs the example and round-trips the document
         run: |

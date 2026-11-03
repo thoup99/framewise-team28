@@ -40,4 +40,54 @@ package Framewise.ISOBMFF.Boxes with SPARK_Mode is
    --  do not fit Natural are intentionally rejected, as all existing
    --  Framewise sample offsets use Natural.
 
+   procedure Read_U32
+     (Data     : Byte_Array;
+      Position : Positive;
+      Value    : out Natural;
+      Ok       : out Boolean);
+   --  Reads 4 big-endian bytes (most significant byte first) at Position.
+   --  Ok = False, Value = 0 if any of the 4 bytes is outside Data, or if
+   --  the number does not fit Natural (it is 2**31 or more).
+
+   procedure Read_U16
+     (Data     : Byte_Array;
+      Position : Positive;
+      Value    : out Natural;
+      Ok       : out Boolean);
+   --  Same as Read_U32, for 2 bytes. A 16-bit value always fits Natural,
+   --  so the only failure is a byte outside Data.
+
+   subtype Box_Kind is String (1 .. 4);
+   --  A box type such as "moov". "subtype" is not a new type: it is String
+   --  with the extra rule "exactly 4 characters", like Box_Header.Kind.
+
+   procedure Find_Child
+     (Data  : Byte_Array;
+      First : Positive;
+      Last  : Natural;
+      Kind  : Box_Kind;
+      Child : out Box_Header;
+      Found : out Boolean)
+     with Post =>
+       (if Found then
+          Child.Kind = Kind
+          and then Child.Box_First >= First
+          and then Child.Box_First <= Child.Box_Last
+          and then Child.Box_Last <= Last
+          and then Child.Header_Length in 8 | 16
+          and then Child.Payload_Size =
+            Child.Box_Last - Child.Box_First + 1 - Child.Header_Length
+          and then (if Child.Payload_Size > 0 then
+                      Child.Payload_First =
+                        Child.Box_First + Child.Header_Length));
+   --  Walks the boxes in positions First .. Last, one after another, and
+   --  returns the first one of type Kind. To look inside a box, pass its
+   --  payload range. Found = False means no such box, or a box before it
+   --  was malformed: the walk cannot go on past a box whose size it does
+   --  not trust.
+   --
+   --  Every child is checked against Last, so it can never claim to reach
+   --  past its parent. That also means size = 0 ("to the end") stops at
+   --  Last here, which is the same as end of file for a top-level box.
+
 end Framewise.ISOBMFF.Boxes;
