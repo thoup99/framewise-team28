@@ -197,3 +197,43 @@ project Discord.
 ## License
 
 Apache-2.0. See `LICENSE`.
+
+### Week 2 C: JPEG tables and entropy bits
+
+`Framewise.JPEG.Tables` reads DQT and DHT **payloads** (without the marker
+or two-byte segment length). Multiple tables per segment and replacement
+of existing IDs are supported. DQT values remain in transmitted zigzag
+order. DHT exposes symbol counts and canonical codes/lengths in symbol
+order. Invalid or truncated segments return `Ok = False` without changing
+the caller's tables. Only 8-bit baseline tables are supported; missing DHT
+is not silently replaced with default tables.
+
+`Framewise.JPEG.Bits` reads up to 16 MSB-first bits at a time from an
+entropy-data slice. Keep that same slice for each reader. `FF00` supplies
+one literal `FF`; markers (including restart markers) stop the reader and
+are available through `Marker`. Exhaustion and malformed stuffing return
+zero and set sticky failure. After a restart, the future MCU decoder must
+reset DC predictors and start a new reader on the remaining slice.
+
+Run the week 2 checks from `tests/`:
+
+```sh
+alr build
+./bin/jpeg_entropy_tests
+# Optional: exact JPEG extracted from an ffmpeg MJPEG proxy
+./bin/jpeg_entropy_tests /path/to/frame.jpg
+```
+
+CI runs both synthetic tests and a real ffmpeg proxy frame. Tests cover
+canonical code assignment, invalid tables, every truncated prefix of the
+synthetic tables, transactional failure, stuffing, markers, cross-byte
+reads, and arrays ending at `Positive'Last`. Pixel decoding remains a
+later milestone; `JPEG.Decode` still reports `Ok = False`. These helpers
+are SPARK code, but this milestone does not claim complete runtime-safety
+proofs or pixel comparison acceptance.
+
+Validated with GNAT/GNATprove 16.1.0: all six test executables passed,
+including `jpeg_entropy_tests` on a JPEG copied from a real MJPEG MOV.
+The normal `gnatprove -P framewise.gpr --mode=flow --checks-as-errors=on`
+completed successfully (219 checks). The two new JPEG child packages alone
+passed 18 flow checks; existing warnings in timeline/Bedrock remain.
