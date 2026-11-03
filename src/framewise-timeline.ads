@@ -87,7 +87,7 @@ package Framewise.Timeline with SPARK_Mode is
    ---------------------------------------------------------------------
 
    function Clip_OK (S : Sequence; C : Clip) return Boolean is
-     (C.Src in 1 .. Max_Sources
+      (C.Src in 1 .. Max_Sources
       and then S.Sources (C.Src).Used
       and then C.Src_In < C.Src_Out
       and then C.Src_Out <= S.Sources (C.Src).Length
@@ -96,30 +96,46 @@ package Framewise.Timeline with SPARK_Mode is
    --  its own; 800 000 years of video is enough.
 
    function Track_OK (S : Sequence; T : Track) return Boolean is
-     ((for all I in 1 .. T.Count => Clip_OK (S, T.Clips (I)))
+      ((for all I in 1 .. T.Count => Clip_OK (S, T.Clips (I)))
       and then (for all I in 1 .. T.Count - 1 =>
                   Ends (T.Clips (I)) <= T.Clips (I + 1).Start));
 
    function Well_Formed (S : Sequence) return Boolean is
-     (for all T in Track_Table'Range =>
-        (if S.Tracks (T).Used then Track_OK (S, S.Tracks (T))));
+      (for all T in Track_Table'Range =>
+         (if S.Tracks (T).Used then Track_OK (S, S.Tracks (T))));
 
    ---------------------------------------------------------------------
    --  Lookup
    ---------------------------------------------------------------------
 
    function Find_Source (S : Sequence; N : Name) return Source_Id;
-   function Find_Track  (S : Sequence; N : Name) return Track_Id;
+   function Find_Track  (S : Sequence; N : Name) return Track_Id
+     --  Postcondition: if a track is found (result /= 0), that track is
+     --  marked Used. Well_Formed only covers used tracks, so this lets
+     --  Place rely on the track's clips being valid before calling Overlaps.
+      with Post => (if Find_Track'Result /= 0
+                     then S.Tracks (Find_Track'Result).Used);
    procedure Find_Clip
-     (S : Sequence; N : Name; T : out Track_Id; I : out Clip_Index);
+     (S : Sequence; N : Name; T : out Track_Id; I : out Clip_Index)
+     --  P1: promise callers what Find_Clip returns, so the prover can
+     --  use T and I safely (Delete, Move, Trim, Split all rely on it).
+      with Post =>
+         --  Found: T is a real track number...
+         (T in 1 .. Max_Tracks
+         --  ...that track is in use (so Well_Formed covers it)...
+         and then S.Tracks (T).Used
+         --  ...and I points to a clip that actually exists on it.
+         and then I in 1 .. S.Tracks (T).Count)
+         --  Not found: both outputs are 0.
+         or else (T = 0 and I = 0);
    --  T = 0 when absent.
 
    function Track_End (S : Sequence; T : Track_Id) return Time
-     with Pre => T in 1 .. Max_Tracks and then Well_Formed (S);
+      with Pre => T in 1 .. Max_Tracks and then Well_Formed (S);
    --  End of the last clip, or 0.
 
    function Sequence_End (S : Sequence) return Time
-     with Pre => Well_Formed (S);
+      with Pre => Well_Formed (S);
 
    ---------------------------------------------------------------------
    --  Operations. All: Pre => Well_Formed, Post => Well_Formed, and
@@ -127,46 +143,46 @@ package Framewise.Timeline with SPARK_Mode is
    ---------------------------------------------------------------------
 
    procedure Clear (S : out Sequence)
-     with Post => Well_Formed (S);
+      with Post => Well_Formed (S);
 
    procedure Add_Source
-     (S : in out Sequence; N : Name; File : Path; Length : Duration_T;
+      (S : in out Sequence; N : Name; File : Path; Length : Duration_T;
       Kind : Media_Kind; Ok : out Boolean)
-     with Pre  => Well_Formed (S) and then Length > 0 and then Length <= Time'Last / 2,
+      with Pre  => Well_Formed (S) and then Length > 0 and then Length <= Time'Last / 2,
           Post => Well_Formed (S);
    --  Ok = False: table full, or a source with that name exists.
 
    procedure Add_Track (S : in out Sequence; N : Name; Kind : Media_Kind; Ok : out Boolean)
-     with Pre => Well_Formed (S), Post => Well_Formed (S);
+      with Pre => Well_Formed (S), Post => Well_Formed (S);
 
    procedure Place
-     (S : in out Sequence; Clip_Name : Name; On : Name; From : Name;
+      (S : in out Sequence; Clip_Name : Name; On : Name; From : Name;
       Src_In, Src_Out, Start : Time; Ok : out Boolean)
-     with Pre => Well_Formed (S), Post => Well_Formed (S);
+      with Pre => Well_Formed (S), Post => Well_Formed (S);
    --  Adds a clip. Ok = False on: unknown track or source, duplicate
    --  clip name, Src_In >= Src_Out, Src_Out past the source, overlap with an
    --  existing clip, track full.
 
    procedure Move (S : in out Sequence; Clip_Name : Name; To : Time; Ok : out Boolean)
-     with Pre => Well_Formed (S), Post => Well_Formed (S);
+      with Pre => Well_Formed (S), Post => Well_Formed (S);
    --  Same track, new position. Ok = False on overlap.
 
    procedure Trim
-     (S : in out Sequence; Clip_Name : Name; New_In, New_Out : Time; Ok : out Boolean)
-     with Pre => Well_Formed (S), Post => Well_Formed (S);
+      (S : in out Sequence; Clip_Name : Name; New_In, New_Out : Time; Ok : out Boolean)
+      with Pre => Well_Formed (S), Post => Well_Formed (S);
    --  Changes the source window; Start is unchanged (so trimming In does
    --  not move the clip's start on the timeline: it changes what plays
    --  there). Ok = False if the new window is empty, past the source,
    --  or the new length overlaps the next clip.
 
    procedure Split
-     (S : in out Sequence; Clip_Name : Name; Start : Time; Right_Name : Name; Ok : out Boolean)
-     with Pre => Well_Formed (S), Post => Well_Formed (S);
+      (S : in out Sequence; Clip_Name : Name; Start : Time; Right_Name : Name; Ok : out Boolean)
+      with Pre => Well_Formed (S), Post => Well_Formed (S) and then (if not Ok then S = S'Old);
    --  Cuts the clip at timeline time Start (strictly inside it) into two
    --  contiguous clips; the right part gets Right_Name. T3.
 
    procedure Delete (S : in out Sequence; Clip_Name : Name; Ok : out Boolean)
-     with Pre => Well_Formed (S), Post => Well_Formed (S);
+      with Pre => Well_Formed (S), Post => Well_Formed (S);
    --  Leaves a gap. Ripple delete (close the gap) is a milestone.
 
 end Framewise.Timeline;

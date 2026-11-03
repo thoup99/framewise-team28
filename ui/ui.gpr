@@ -11,4 +11,10 @@ project Ui is
    package Compiler is
       for Default_Switches ("Ada") use ("-gnat2022", "-gnata", "-g");
    end Compiler;
+
+   package Linker is
+      for Linker_Options use
+      ("-LC:/msys64/mingw64/lib");
+   end Linker;
+
 end Ui;
