@@ -1,7 +1,10 @@
 # ui: the contract
 
-Not built yet. When it is, it obeys three rules, and CI greps for the
-first one.
+Week 2 provides the command bar, a read-only graphical timeline with
+zoom/scroll, a source list, and file-picker import with explicit duration.
+See [WEEK2_REVIEW.md](WEEK2_REVIEW.md) for build and verification steps.
+Mouse editing remains week 3 work. The GUI obeys these three rules; CI
+checks the first one.
 
 1. **Nothing in `ui/` withs anything below `Framewise.Session`.** The
    GUI sees `Framewise.Session` (Execute, Sequence_Of, Settings_Of,
