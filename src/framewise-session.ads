@@ -35,11 +35,16 @@ package Framewise.Session is
    --  Read-back for front ends
    ---------------------------------------------------------------------
 
-   function Sequence_Of (S : Session) return Timeline.Sequence;
+   subtype Sequence_View is Timeline.Sequence;
+
+   function Sequence_Of (S : Session) return Sequence_View;
    --  A copy; the GUI draws the timeline from it. Bounded, so cheap
    --  enough per Execute.
 
    function Settings_Of (S : Session) return Plan.Settings;
+
+   function Image_Time (T : Framewise.Time) return String
+      renames Framewise.Commands.Image_Time;
 
    function History_Length (S : Session) return Natural;
    function History_Line (S : Session; I : Positive) return String
