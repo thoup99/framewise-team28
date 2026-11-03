@@ -97,6 +97,102 @@ begin
       Check ("out-of-buffer position rejected", not Ok);
    end;
 
+   --  Week 2: Read_U32 and Read_U16.
+   declare
+      Bytes : constant Byte_Array := [16#12#, 16#34#, 16#56#, 16#78#, 16#FF#, 16#FF#];
+      Top   : constant Byte_Array := [16#7F#, 16#FF#, 16#FF#, 16#FF#];
+      Over  : constant Byte_Array := [16#80#, 16#00#, 16#00#, 16#00#];
+      At_Five : constant Byte_Array (5 .. 8) := [0, 0, 1, 0];
+      Value : Natural;
+   begin
+      Read_U32 (Bytes, 1, Value, Ok);
+      Check ("U32 is big-endian", Ok and then Value = 16#1234_5678#);
+      Read_U16 (Bytes, 1, Value, Ok);
+      Check ("U16 is big-endian", Ok and then Value = 16#1234#);
+      Read_U16 (Bytes, 5, Value, Ok);
+      Check ("U16 reads the largest value", Ok and then Value = 65_535);
+      Read_U32 (Bytes, 3, Value, Ok);
+      Check ("U32 at a later position", Ok and then Value = 16#5678_FFFF#);
+
+      Read_U32 (Top, 1, Value, Ok);
+      Check ("U32 accepts Natural'Last", Ok and then Value = Natural'Last);
+      Read_U32 (Over, 1, Value, Ok);
+      Check ("U32 of 2**31 rejected", not Ok and then Value = 0);
+
+      Read_U32 (Bytes, 4, Value, Ok);
+      Check ("U32 running past the end rejected", not Ok and then Value = 0);
+      Read_U32 (Bytes, 7, Value, Ok);
+      Check ("U32 starting past the end rejected", not Ok);
+      Read_U16 (Bytes, 6, Value, Ok);
+      Check ("U16 running past the end rejected", not Ok);
+      Read_U16 (Bytes, Positive'Last, Value, Ok);
+      Check ("U16 at the largest position rejected", not Ok);
+
+      Read_U32 (At_Five, 5, Value, Ok);
+      Check ("U32 uses absolute positions", Ok and then Value = 256);
+      Read_U32 (At_Five, 1, Value, Ok);
+      Check ("U32 before the array rejected", not Ok);
+   end;
+
+   --  Week 2: Find_Child. A parent holding free(8), moov(16) with a
+   --  nested trak(8) inside it, then mdat(10).
+   declare
+      Tree : constant Byte_Array :=
+        [0, 0, 0, 8, 102, 114, 101, 101,
+         0, 0, 0, 16, 109, 111, 111, 118,
+         0, 0, 0, 8, 116, 114, 97, 107,
+         0, 0, 0, 10, 109, 100, 97, 116, 1, 2];
+      Found : Boolean;
+   begin
+      Find_Child (Tree, 1, Tree'Last, "free", H, Found);
+      Check ("find the first child", Found and then H.Box_First = 1);
+
+      Find_Child (Tree, 1, Tree'Last, "mdat", H, Found);
+      Check ("find a later child", Found and then H.Box_First = 25
+             and then H.Box_Last = 34 and then H.Payload_First = 33);
+
+      Find_Child (Tree, 1, Tree'Last, "trak", H, Found);
+      Check ("nested box is not a direct child", not Found);
+
+      Find_Child (Tree, 1, Tree'Last, "moov", H, Found);
+      Check ("find the parent", Found);
+      Find_Child (Tree, H.Payload_First, H.Box_Last, "trak", H, Found);
+      Check ("find inside the parent's payload", Found and then H.Box_First = 17);
+
+      Find_Child (Tree, 1, Tree'Last, "stbl", H, Found);
+      Check ("missing child not found", not Found);
+
+      Find_Child (Tree, 9, 8, "moov", H, Found);
+      Check ("empty range finds nothing", not Found);
+
+      Find_Child (Tree, 1, 15, "moov", H, Found);
+      Check ("child reaching past the range rejected", not Found);
+
+      for I in 1 .. Tree'Last - 1 loop
+         Find_Child (Tree (1 .. I), 1, I, "mdat", H, Found);
+         Check ("tree truncated to" & I'Image, not Found);
+      end loop;
+
+      declare
+         Bad : Byte_Array := Tree;
+      begin
+         Bad (4) := 0;
+         Bad (1) := 16#7F#;  --  first box claims about 2 GB
+         Find_Child (Bad, 1, Bad'Last, "mdat", H, Found);
+         Check ("huge sibling stops the walk", not Found);
+
+         Bad := Tree;
+         Bad (4) := 3;  --  size 3 is smaller than a header
+         Find_Child (Bad, 1, Bad'Last, "mdat", H, Found);
+         Check ("sibling smaller than a header stops the walk", not Found);
+
+         Bad := Tree;
+         Bad (4) := 0;  --  size 0 swallows the rest of the range
+         Find_Child (Bad, 1, Bad'Last, "mdat", H, Found);
+         Check ("size-zero sibling hides later boxes", not Found);
+      end;
+   end;
+
    if Failures = 0 then
       Put_Line ("all ISOBMFF box reader tests passed");
    else

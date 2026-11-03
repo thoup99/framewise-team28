@@ -108,4 +108,66 @@ package body Framewise.ISOBMFF.Boxes with SPARK_Mode is
       Ok := True;
    end Read_Box;
 
+   --  Both only pick the byte count; Read_Unsigned does the real work,
+   --  so there is one place where a bounds or overflow mistake can hide.
+   procedure Read_U32
+     (Data     : Byte_Array;
+      Position : Positive;
+      Value    : out Natural;
+      Ok       : out Boolean)
+   is
+   begin
+      Read_Unsigned (Data, Position, 4, Value, Ok);
+   end Read_U32;
+
+   procedure Read_U16
+     (Data     : Byte_Array;
+      Position : Positive;
+      Value    : out Natural;
+      Ok       : out Boolean)
+   is
+   begin
+      Read_Unsigned (Data, Position, 2, Value, Ok);
+   end Read_U16;
+
+   procedure Find_Child
+     (Data  : Byte_Array;
+      First : Positive;
+      Last  : Natural;
+      Kind  : Box_Kind;
+      Child : out Box_Header;
+      Found : out Boolean)
+   is
+      Position : Positive := First;
+      Good     : Boolean;
+   begin
+      --  No need to set Child here: Read_Box sets it on every call (to the
+      --  empty header when it fails), and the reset after the loop covers
+      --  the case where the loop never runs.
+      Found := False;
+
+      while Position <= Last loop
+         --  Giving Last as File_Size keeps the child inside this range.
+         Read_Box (Data, Position, Last, Child, Good);
+         if not Good then
+            return;
+         end if;
+
+         if Child.Kind = Kind then
+            Found := True;
+            return;
+         end if;
+
+         --  Checked first: the "+ 1" below could overflow at Natural'Last.
+         exit when Child.Box_Last >= Last;
+
+         --  Read_Box promises Box_Last >= Position, so this always moves
+         --  forward. A hostile file cannot make this loop run forever.
+         Position := Child.Box_Last + 1;
+         pragma Loop_Variant (Increases => Position);
+      end loop;
+
+      Child := (others => <>);
+   end Find_Child;
+
 end Framewise.ISOBMFF.Boxes;

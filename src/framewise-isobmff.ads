@@ -54,6 +54,8 @@
 package Framewise.ISOBMFF with SPARK_Mode is
 
    Max_Samples : constant := 65_536;   --  ~36 min of 30 fps proxy
+   --  For audio, one chunk counts as one sample, because PCM has far more
+   --  samples than this. The reason is in Framewise.ISOBMFF.Tables.
 
    type Byte is mod 2 ** 8 with Size => 8;
    type Byte_Array is array (Positive range <>) of Byte with Pack;
