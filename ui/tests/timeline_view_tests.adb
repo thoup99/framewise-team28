@@ -89,6 +89,29 @@ begin
    Run ("undo");
    Rebuild;
    pragma Assert (Clip_Box ("c3").X = 558.0);
+   --  Dragging the right edge should shorten c3 by one second.
+   declare
+      V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (H);
+   begin
+      --  c3 spans X = 558 to X = 814.
+      --  Drag its right edge left by 32 pixels (one second).
+      Timeline_View.On_Mouse_Down
+        (V.Ptr.all, 810.0, 50.0, Left_Button);
+      Timeline_View.On_Mouse_Up
+        (V.Ptr.all, 778.0, 50.0, Left_Button);
+   end;
+   Rebuild;
+
+   --  Start position stays the same; duration decreases.
+   pragma Assert (Clip_Box ("c3").X = 558.0);
+   pragma Assert (Clip_Box ("c3").Width = 224.0);
+
+   --  Undo restores the original clip duration.
+   Run ("undo");
+   Rebuild;
+   pragma Assert (Clip_Box ("c3").X = 558.0);
+   pragma Assert (Clip_Box ("c3").Width = 256.0);
+
 
    --  A failed engine edit must leave the drawn geometry unchanged.
    Run ("move c3 10", False);

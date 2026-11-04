@@ -89,6 +89,7 @@ package body Timeline_View is
    begin
 
    W.Drag_Active := False;
+   W.Drag_Trim_Right := False;
 
       if Button /= Left_Button
         or else W.Read_Sequence = null
@@ -124,8 +125,15 @@ package body Timeline_View is
                            W.Drag_Name :=
                              To_Unbounded_String (Framewise.Image (C.N));
                            W.Drag_Start_X := X;
-                           W.Drag_Start_Time :=
-                             Framewise.Seconds (C.Start);
+                           W.Drag_Start_Time := Framewise.Seconds (C.Start);
+                           W.Drag_Src_In := Framewise.Seconds (C.Src_In);
+                           W.Drag_Src_Out := Framewise.Seconds (C.Src_Out);
+
+                        --  The last 8 pixels of the visible clip are the trim handle.
+                        --  Do not treat a clipped-off right edge as a trim handle.
+                           W.Drag_Trim_Right :=
+                              Clip_X2 <= Right and then X >= Clip_X2 - 8.0;
+
                            W.Drag_Active := True;
                            return;
                         end if;
@@ -160,23 +168,50 @@ package body Timeline_View is
          return;
       end if;
 
-      New_Time := Long_Float'Max
-        (0.0, W.Drag_Start_Time +
-         Long_Float (X - W.Drag_Start_X) / W.Zoom);
+      if W.Drag_Trim_Right then
+         --  Convert horizontal movement into a source out-point.
+         --  Keep the existing source in-point and timeline start.
+         New_Time :=
+           W.Drag_Src_Out +
+           Long_Float (X - W.Drag_Start_X) / W.Zoom;
 
-      --  Keep conversion to timeline ticks within the valid range.
-      if New_Time >
-        Long_Float (Framewise.Time'Last / 2) /
-        Long_Float (Framewise.Timebase)
-      then
-         return;
+         if New_Time <= W.Drag_Src_In
+           or else New_Time >
+             Long_Float (Framewise.Time'Last / 2) /
+             Long_Float (Framewise.Timebase)
+         then
+            return;
+         end if;
+
+         W.Submit_Command.all
+           ("trim " & To_String (W.Drag_Name) & " " &
+            Framewise.Session.Image_Time
+              (Framewise.Time
+                 (W.Drag_Src_In * Long_Float (Framewise.Timebase))) &
+            " " &
+            Framewise.Session.Image_Time
+              (Framewise.Time
+                 (New_Time * Long_Float (Framewise.Timebase))));
+      else
+         --  Dragging the body still moves the entire clip.
+         New_Time := Long_Float'Max
+           (0.0, W.Drag_Start_Time +
+            Long_Float (X - W.Drag_Start_X) / W.Zoom);
+
+         if New_Time >
+           Long_Float (Framewise.Time'Last / 2) /
+           Long_Float (Framewise.Timebase)
+         then
+            return;
+         end if;
+
+         W.Submit_Command.all
+           ("move " & To_String (W.Drag_Name) & " " &
+            Framewise.Session.Image_Time
+              (Framewise.Time
+                 (New_Time * Long_Float (Framewise.Timebase))));
       end if;
 
-      W.Submit_Command.all
-        ("move " & To_String (W.Drag_Name) & " " &
-         Framewise.Session.Image_Time
-           (Framewise.Time
-              (New_Time * Long_Float (Framewise.Timebase))));
    end On_Mouse_Up;
 
 end Timeline_View;
