@@ -1,6 +1,7 @@
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Adi.Core; use Adi.Core;
 with Adi.Widget; use Adi.Widget;
+with Ada.Strings.Fixed;
 with Framewise;
 
 package body Timeline_View is
@@ -122,6 +123,66 @@ package body Timeline_View is
                         if X >= Pixel_Type'Max (Left, Clip_X1)
                           and then X <= Pixel_Type'Min (Right, Clip_X2)
                         then
+   --  In Razor Mode, a click splits the clip instead of dragging it.
+   if W.Razor_Mode then
+      if W.Submit_Command /= null then
+         declare
+            Cut_Seconds : constant Long_Float :=
+              W.First_Second + Long_Float (X - Left) / W.Zoom;
+         begin
+            if Cut_Seconds >= 0.0
+              and then Cut_Seconds <
+                Long_Float (Framewise.Time'Last / 2) /
+                Long_Float (Framewise.Timebase)
+            then
+               declare
+                  Cut : constant Framewise.Time :=
+                    Framewise.Time
+                      (Cut_Seconds * Long_Float (Framewise.Timebase));
+               begin
+                  --  The cut must be strictly inside the clip.
+                  if Cut > C.Start
+                    and then Cut - C.Start < C.Src_Out - C.Src_In
+                  then
+                     --  Find an unused name for the right-hand clip.
+                     for N in 1 .. 9999 loop
+                        declare
+                           New_Name : constant String :=
+                             "r" & Ada.Strings.Fixed.Trim
+                               (Positive'Image (N), Ada.Strings.Left);
+                           Taken : Boolean := False;
+                        begin
+                           for Other_Track of Seq.Tracks loop
+                              if Other_Track.Used then
+                                 for J in 1 .. Other_Track.Count loop
+                                    if Framewise.Image
+                                      (Other_Track.Clips (J).N) = New_Name
+                                    then
+                                       Taken := True;
+                                       exit;
+                                    end if;
+                                 end loop;
+                              end if;
+                              exit when Taken;
+                           end loop;
+
+                           if not Taken then
+                              W.Submit_Command.all
+                                ("split " & Framewise.Image (C.N) & " " &
+                                 Framewise.Session.Image_Time (Cut) &
+                                 " " & New_Name);
+                              return;
+                           end if;
+                        end;
+                     end loop;
+                  end if;
+               end;
+            end if;
+         end;
+      end if;
+      return;
+   end if;
+
                            W.Drag_Name :=
                              To_Unbounded_String (Framewise.Image (C.N));
                            W.Drag_Start_X := X;

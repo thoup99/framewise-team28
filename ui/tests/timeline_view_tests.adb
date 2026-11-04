@@ -111,6 +111,39 @@ begin
    Rebuild;
    pragma Assert (Clip_Box ("c3").X = 558.0);
    pragma Assert (Clip_Box ("c3").Width = 256.0);
+   --  Razor Mode should split c3 into two adjacent clips.
+   declare
+      V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (H);
+      History_Before : constant Natural := FS.History_Length (S);
+   begin
+      V.Razor_Mode := True;
+
+      --  Click inside c3 at X = 650.
+      Timeline_View.On_Mouse_Down
+        (V.Ptr.all, 650.0, 50.0, Left_Button);
+
+      V.Razor_Mode := False;
+
+      --  One split should create exactly one history entry.
+      pragma Assert (FS.History_Length (S) = History_Before + 1);
+   end;
+   Rebuild;
+
+   --  The two clips should preserve the original timeline duration.
+   pragma Assert (Clip_Box ("c3").X = 558.0);
+   pragma Assert (Clip_Box ("r1").Width > 0.0);
+   pragma Assert
+     (Clip_Box ("c3").Width + Clip_Box ("r1").Width = 256.0);
+   pragma Assert
+     (Clip_Box ("r1").X =
+      Clip_Box ("c3").X + Clip_Box ("c3").Width);
+
+   --  One undo should reverse the entire split.
+   Run ("undo");
+   Rebuild;
+   pragma Assert (Clip_Box ("r1").Width = 0.0);
+   pragma Assert (Clip_Box ("c3").Width = 256.0);
+
 
 
    --  A failed engine edit must leave the drawn geometry unchanged.

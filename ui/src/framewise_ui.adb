@@ -55,6 +55,8 @@ procedure Framewise_UI is
    Import_Dialog : Adi.Widget.Dialog.Dialog_Handle;
    Zoom_In, Zoom_Out, Scroll_Left, Scroll_Right : Adi.Widget.Button.Button_Handle;
    View_Status : Adi.Widget.Label.Label_Handle;
+   Razor_Button : Adi.Widget.Button.Button_Handle;
+   Tool_Status  : Adi.Widget.Label.Label_Handle;
    use type Timeline_View.Views.Handle;
    Import_Name : Adi.Widget.Text_Input.Text_Input_Handle;
    Import_File : Adi.Widget.Text_Input.Text_Input_Handle;
@@ -261,6 +263,19 @@ procedure Framewise_UI is
       Mark_Dirty (+Tracks);
    end Change_View;
 
+   procedure Toggle_Razor (Button : Widget_Handle) is
+      pragma Unreferenced (Button);
+      V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+   begin
+      V.Razor_Mode := not V.Razor_Mode;
+
+      Adi.Widget.Label.Set_Text
+        (Tool_Status,
+         (if V.Razor_Mode
+          then "Razor ON - click a clip to split"
+          else "Razor OFF - drag to move or trim"));
+   end Toggle_Razor;
+
    procedure Key_Down
      (Scancode : Adi.SDL.Events.SDL_Scancode;
       Keycode  : Adi.SDL.Events.SDL_Keycode;
@@ -318,6 +333,8 @@ begin
       end;
       Sources := Adi.Widget.Text_Editor.Create_Handle ("Sources");
       Adi.Widget.Text_Editor.Set_Read_Only (Sources);
+      Razor_Button := Adi.Widget.Button.Create_Handle ("Razor Mode");
+      Tool_Status := Adi.Widget.Label.Create_Handle ("Razor OFF");
       Zoom_In := Adi.Widget.Button.Create_Handle ("Zoom +");
       Zoom_Out := Adi.Widget.Button.Create_Handle ("Zoom -");
       Scroll_Left := Adi.Widget.Button.Create_Handle ("Earlier 5s");
@@ -364,6 +381,8 @@ begin
       Style_Button (Import_Button);
       Style_Button (Zoom_In);
       Style_Button (Zoom_Out);
+      Style_Button (Razor_Button);
+      Set_Part_Style (+Tool_Status, Label_Part, Style.Base (Text_Style).Build);
       Style_Button (Scroll_Left);
       Style_Button (Scroll_Right);
       Style_Input (Command_Field);
@@ -410,6 +429,7 @@ begin
       Adi.Widget.Button.Connect_Clicked (Zoom_Out, Change_View'Unrestricted_Access);
       Adi.Widget.Button.Connect_Clicked (Scroll_Left, Change_View'Unrestricted_Access);
       Adi.Widget.Button.Connect_Clicked (Scroll_Right, Change_View'Unrestricted_Access);
+      Adi.Widget.Button.Connect_Clicked (Razor_Button, Toggle_Razor'Unrestricted_Access);
       Connect_Key_Down (W, Key_Down'Unrestricted_Access);
 
       Add_Child (+Root, +Title);
@@ -420,6 +440,8 @@ begin
       Add_Child (+View_Row, +Zoom_In);
       Add_Child (+View_Row, +Scroll_Left);
       Add_Child (+View_Row, +Scroll_Right);
+      Add_Child (+View_Row, +Razor_Button);
+      Add_Child (+View_Row, +Tool_Status);
       Add_Child (+View_Row, +View_Status);
       Add_Child (+Import_Row, +Import_Name_Label);
       Add_Child (+Import_Row, +Import_Name);
