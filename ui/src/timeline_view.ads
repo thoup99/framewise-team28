@@ -18,6 +18,8 @@ package Timeline_View is
       Zoom           : Long_Float := 32.0;
       First_Second   : Long_Float := 0.0;
       Razor_Mode : Boolean := False;
+      Selected_Clip : Ada.Strings.Unbounded.Unbounded_String;
+      Selection_Changed : Command_Callback := null;
 
       Drag_Active     : Boolean := False;
       Drag_Name       : Ada.Strings.Unbounded.Unbounded_String;

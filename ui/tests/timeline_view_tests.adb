@@ -144,6 +144,32 @@ begin
    pragma Assert (Clip_Box ("r1").Width = 0.0);
    pragma Assert (Clip_Box ("c3").Width = 256.0);
 
+   --  Clicking a clip selects it without changing the timeline.
+   declare
+      V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (H);
+      History_Before : constant Natural := FS.History_Length (S);
+   begin
+      Timeline_View.On_Mouse_Down
+        (V.Ptr.all, 600.0, 50.0, Left_Button);
+      Timeline_View.On_Mouse_Up
+        (V.Ptr.all, 600.0, 50.0, Left_Button);
+
+      pragma Assert (To_String (V.Selected_Clip) = "c3");
+      pragma Assert (FS.History_Length (S) = History_Before);
+   end;
+
+   --  Deleting the selected clip removes it from the timeline.
+   Run ("delete c3");
+   Rebuild;
+   pragma Assert (Clip_Box ("c3").Width = 0.0);
+
+   --  A single undo restores the deleted clip.
+   Run ("undo");
+   Rebuild;
+   pragma Assert (Clip_Box ("c3").X = 558.0);
+   pragma Assert (Clip_Box ("c3").Width = 256.0);
+
+
 
 
    --  A failed engine edit must leave the drawn geometry unchanged.

@@ -59,7 +59,10 @@ package body Timeline_View is
                        Left + Pixel_Type (Long_Float'Min (Long_Float (Right - Left), X2));
                   begin
                      if Visible_Right > Visible_Left then
-                        Add_Item (W, Make_Panel (Indicator_Part,
+                        Add_Item (W, Make_Panel
+                           ((if To_String (W.Selected_Clip) = Framewise.Image (C.N)
+                           then Selected_Part
+                           else Indicator_Part),
                           (Visible_Left, Y + 4.0, Visible_Right - Visible_Left, 36.0), 1));
                         Label ((Visible_Left + 3.0, Y + 10.0,
                                 Pixel_Type'Max (0.0, Visible_Right - Visible_Left - 6.0),
@@ -92,6 +95,14 @@ package body Timeline_View is
    W.Drag_Active := False;
    W.Drag_Trim_Right := False;
 
+   if not W.Razor_Mode then
+      W.Selected_Clip := Null_Unbounded_String;
+
+      if W.Selection_Changed /= null then
+         W.Selection_Changed.all ("");
+      end if;
+   end if;
+
       if Button /= Left_Button
         or else W.Read_Sequence = null
         or else W.Zoom <= 0.0
@@ -123,6 +134,14 @@ package body Timeline_View is
                         if X >= Pixel_Type'Max (Left, Clip_X1)
                           and then X <= Pixel_Type'Min (Right, Clip_X2)
                         then
+   if not W.Razor_Mode then
+      W.Selected_Clip :=
+         To_Unbounded_String (Framewise.Image (C.N));
+
+      if W.Selection_Changed /= null then
+         W.Selection_Changed.all (Framewise.Image (C.N));
+      end if;
+   end if;
    --  In Razor Mode, a click splits the clip instead of dragging it.
    if W.Razor_Mode then
       if W.Submit_Command /= null then

@@ -169,6 +169,19 @@ procedure Framewise_UI is
       Refresh_Log;
    end Execute_Line;
 
+      procedure Clip_Selected (Name : String) is
+   begin
+      if Name'Length > 0 then
+         Set_Focus (W, +Tracks);
+         Adi.Widget.Label.Set_Text
+           (Status, "Selected: " & Name & " | Delete to remove");
+      else
+         Adi.Widget.Label.Set_Text (Status, "No clip selected");
+      end if;
+
+      Mark_Dirty (+Tracks);
+   end Clip_Selected;
+
    procedure Submit is
       use Ada.Strings.Fixed;
       Line : constant String := Trim
@@ -283,16 +296,66 @@ procedure Framewise_UI is
       Repeat   : Boolean;
       Handled  : in out Boolean)
    is
-      pragma Unreferenced (Keycode, Key_Mod);
+      pragma Unreferenced (Keycode);
+      use type Adi.SDL.Events.SDL_Keymod;
    begin
-      if not Repeat
-        and then (Scancode = Adi.SDL.Events.SDL_SCANCODE_RETURN)
+      if Repeat then
+         return;
+      end if;
+
+      if Scancode = Adi.SDL.Events.SDL_SCANCODE_RETURN
         and then Get_Focus_Handle (W) = Widget_Handle'(+Command_Field)
       then
          Handled := True;
          Submit;
+
+      elsif Get_Focus_Handle (W) = Widget_Handle'(+Tracks) then
+
+         --  Ctrl+Z undoes the last editing command.
+         if Scancode = Adi.SDL.Events.SDL_SCANCODE_Z
+           and then
+             (Key_Mod and Adi.SDL.Events.SDL_KMOD_CTRL) /= 0
+         then
+            Handled := True;
+            Execute_Line ("undo");
+
+         --  Delete removes the selected clip.
+         elsif Scancode = Adi.SDL.Events.SDL_SCANCODE_DELETE then
+            declare
+               Selected : US.Unbounded_String :=
+                 US.Null_Unbounded_String;
+            begin
+               declare
+                  V : Timeline_View.Views.Ref :=
+                    Timeline_View.Views.Borrow (Tracks);
+               begin
+                  if not V.Razor_Mode then
+                     Selected := V.Selected_Clip;
+                  end if;
+               end;
+
+               if US.Length (Selected) > 0 then
+                  Handled := True;
+                  Execute_Line ("delete " & US.To_String (Selected));
+
+                  if Reply.Ok then
+                     declare
+                        V : Timeline_View.Views.Ref :=
+                          Timeline_View.Views.Borrow (Tracks);
+                     begin
+                        V.Selected_Clip := US.Null_Unbounded_String;
+                     end;
+
+                     Adi.Widget.Label.Set_Text
+                       (Status, "Clip deleted. Ctrl+Z to undo.");
+                     Mark_Dirty (+Tracks);
+                  end if;
+               end if;
+            end;
+         end if;
       end if;
    end Key_Down;
+
 
 begin
    A.Init;
@@ -325,11 +388,13 @@ begin
    begin
       Tracks := Timeline_View.Views.New_Widget;
       Set_Flag (+Tracks, Clickable, True);
+      Set_Flag (+Tracks, Focusable, True);
       declare
          V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
       begin
          V.Read_Sequence := Read_Sequence'Unrestricted_Access;
          V.Submit_Command := Execute_Line'Unrestricted_Access;
+         V.Selection_Changed := Clip_Selected'Unrestricted_Access;
       end;
       Sources := Adi.Widget.Text_Editor.Create_Handle ("Sources");
       Adi.Widget.Text_Editor.Set_Read_Only (Sources);
@@ -408,6 +473,9 @@ begin
       Set_Part_Style (+Tracks, Label_Part, Style.Base (Text_Style).Build);
       Set_Part_Style (+Tracks, Indicator_Part, Style.Base
         ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
+      Set_Part_Style (+Tracks, Selected_Part, Style.Base
+         ((Background_Color => Set_Bg (RGB (230, 158, 48)),
+            others => <>)).Build);
       Set_Part_Style (+View_Row, Main_Part, Style.Base (Input_Row_Style).Build);
       Set_Part_Style (+View_Status, Label_Part, Style.Base (Text_Style).Build);
       Set_Part_Style
