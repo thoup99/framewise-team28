@@ -19,6 +19,12 @@ procedure Timeline_View_Tests is
       pragma Assert (R.Ok = Success, FS.Image (R));
    end Run;
 
+   --  Route simulated mouse edits through the session.
+   procedure Submit_Mouse_Command (Line : String) is
+   begin
+      Run (Line);
+   end Submit_Mouse_Command;
+
    function Clip_Box (Name : String) return Rectangle is
    begin
       for I in 1 .. Item_Count (+H) loop
@@ -45,6 +51,7 @@ begin
       V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (H);
    begin
       V.Read_Sequence := Read_Sequence'Unrestricted_Access;
+      V.Submit_Command := Submit_Mouse_Command'Unrestricted_Access;
    end;
    Run ("load ../examples/cut.fw");
    Rebuild;
@@ -52,6 +59,37 @@ begin
    pragma Assert (Clip_Box ("c2") = (382.0, 34.0, 160.0, 36.0));
    pragma Assert (Clip_Box ("c3") = (558.0, 34.0, 256.0, 36.0));
    pragma Assert (Clip_Box ("m1") = (110.0, 82.0, 704.0, 36.0));
+   --  Clicking without dragging should leave the clip unchanged.
+   declare
+      V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (H);
+   begin
+      Timeline_View.On_Mouse_Down
+        (V.Ptr.all, 600.0, 50.0, Left_Button);
+      Timeline_View.On_Mouse_Up
+        (V.Ptr.all, 600.0, 50.0, Left_Button);
+   end;
+   Rebuild;
+   pragma Assert (Clip_Box ("c3").X = 558.0);
+
+   --  Drag c3 left by 16 pixels (0.5 seconds at 32 px/s).
+   declare
+      V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (H);
+   begin
+      Timeline_View.On_Mouse_Down
+        (V.Ptr.all, 600.0, 50.0, Left_Button);
+      Timeline_View.On_Mouse_Up
+        (V.Ptr.all, 584.0, 50.0, Left_Button);
+   end;
+   Rebuild;
+
+   --  c3 should move from 14 seconds to 13.5 seconds.
+   pragma Assert (Clip_Box ("c3").X = 542.0);
+
+   --  Undo should restore the original clip position.
+   Run ("undo");
+   Rebuild;
+   pragma Assert (Clip_Box ("c3").X = 558.0);
+
    --  A failed engine edit must leave the drawn geometry unchanged.
    Run ("move c3 10", False);
    Rebuild;

@@ -1,8 +1,10 @@
+with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Adi.Core; use Adi.Core;
 with Adi.Widget; use Adi.Widget;
 with Framewise;
 
 package body Timeline_View is
+   use type Framewise.Time;
    overriding procedure Build_Items (W : in out Track_Widget) is
       use type Framewise.Time;
       G : constant Rectangle := Get_Geometry (W);
@@ -72,4 +74,109 @@ package body Timeline_View is
          end if;
       end;
    end Build_Items;
+
+   overriding procedure On_Mouse_Down
+     (W      : in out Track_Widget;
+      X, Y   : Pixel_Type;
+      Button : Mouse_Button;
+      Clicks : Natural := 1)
+   is
+      pragma Unreferenced (Clicks);
+      G     : constant Rectangle := Get_Geometry (W);
+      Left  : constant Pixel_Type := G.X + 110.0;
+      Right : constant Pixel_Type := G.X + G.Width;
+      Row_Y : Pixel_Type := G.Y + 30.0;
+   begin
+
+   W.Drag_Active := False;
+
+      if Button /= Left_Button
+        or else W.Read_Sequence = null
+        or else W.Zoom <= 0.0
+        or else X < Left
+        or else X > Right
+      then
+         return;
+      end if;
+
+      declare
+         Seq : constant Framewise.Session.Sequence_View :=
+           W.Read_Sequence.all;
+      begin
+         for Track of Seq.Tracks loop
+            if Track.Used then
+               if Y >= Row_Y + 4.0 and then Y <= Row_Y + 40.0 then
+                  for I in 1 .. Track.Count loop
+                     declare
+                        C renames Track.Clips (I);
+                        Clip_X1 : constant Pixel_Type :=
+                          Left + Pixel_Type
+                            ((Framewise.Seconds (C.Start) -
+                              W.First_Second) * W.Zoom);
+                        Clip_X2 : constant Pixel_Type :=
+                          Clip_X1 + Pixel_Type
+                            (Framewise.Seconds (C.Src_Out - C.Src_In)
+                             * W.Zoom);
+                     begin
+                        if X >= Pixel_Type'Max (Left, Clip_X1)
+                          and then X <= Pixel_Type'Min (Right, Clip_X2)
+                        then
+                           W.Drag_Name :=
+                             To_Unbounded_String (Framewise.Image (C.N));
+                           W.Drag_Start_X := X;
+                           W.Drag_Start_Time :=
+                             Framewise.Seconds (C.Start);
+                           W.Drag_Active := True;
+                           return;
+                        end if;
+                     end;
+                  end loop;
+               end if;
+               Row_Y := Row_Y + 48.0;
+            end if;
+         end loop;
+      end;
+   end On_Mouse_Down;
+
+   overriding procedure On_Mouse_Up
+     (W      : in out Track_Widget;
+      X, Y   : Pixel_Type;
+      Button : Mouse_Button)
+   is
+      pragma Unreferenced (Y);
+      New_Time : Long_Float;
+   begin
+      if Button /= Left_Button or else not W.Drag_Active then
+         return;
+      end if;
+
+      W.Drag_Active := False;
+
+      --  Ignore clicks without meaningful mouse movement.
+      if abs (X - W.Drag_Start_X) < 3.0
+        or else W.Submit_Command = null
+        or else W.Zoom <= 0.0
+      then
+         return;
+      end if;
+
+      New_Time := Long_Float'Max
+        (0.0, W.Drag_Start_Time +
+         Long_Float (X - W.Drag_Start_X) / W.Zoom);
+
+      --  Keep conversion to timeline ticks within the valid range.
+      if New_Time >
+        Long_Float (Framewise.Time'Last / 2) /
+        Long_Float (Framewise.Timebase)
+      then
+         return;
+      end if;
+
+      W.Submit_Command.all
+        ("move " & To_String (W.Drag_Name) & " " &
+         Framewise.Session.Image_Time
+           (Framewise.Time
+              (New_Time * Long_Float (Framewise.Timebase))));
+   end On_Mouse_Up;
+
 end Timeline_View;

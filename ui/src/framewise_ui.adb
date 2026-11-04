@@ -309,10 +309,12 @@ begin
          Adi.Widget.Label.Create_Handle ("Kind (video / audio / both): ");
    begin
       Tracks := Timeline_View.Views.New_Widget;
+      Set_Flag (+Tracks, Clickable, True);
       declare
          V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
       begin
          V.Read_Sequence := Read_Sequence'Unrestricted_Access;
+         V.Submit_Command := Execute_Line'Unrestricted_Access;
       end;
       Sources := Adi.Widget.Text_Editor.Create_Handle ("Sources");
       Adi.Widget.Text_Editor.Set_Read_Only (Sources);
