@@ -1,5 +1,6 @@
 --  ISO Base Media File Format (MP4 / MOV) demuxer. Pure Ada, SPARK.
---  PLACEHOLDER in the seed: Parse reports Ok = False.
+--  Parse is built from three child packages: Boxes (box headers),
+--  Tables (the raw sample tables) and Resolve (samples and mdat checks).
 --
 --  Why our own: the proxy file (Motion JPEG + PCM in a .mov) is the
 --  only file the editor reads, and reading it must not crash on a
@@ -61,10 +62,12 @@ package Framewise.ISOBMFF with SPARK_Mode is
    type Byte_Array is array (Positive range <>) of Byte with Pack;
 
    type Sample is record
-      Offset : Natural := 0;          --  absolute, into the file
+      Offset : Natural := 0;          --  absolute, into the file, from 0
       Size   : Natural := 0;
       Start  : Time := 0;            --  in Framewise ticks
    end record;
+   --  Offset counts from 0, as stco/co64 and ffprobe's "pos" do. For an
+   --  audio track a Sample is one whole chunk of PCM (see above).
 
    type Sample_Index is range 0 .. Max_Samples;
    type Sample_Array is array (Sample_Index range 1 .. Max_Samples) of Sample;
@@ -89,6 +92,8 @@ package Framewise.ISOBMFF with SPARK_Mode is
       Audio      : Track;
       Length     : Duration_T := 0;
    end record;
+   --  Mdat_First .. Mdat_Last: mdat's payload bytes, as offsets from 0
+   --  like Sample.Offset. Length: when the longer track ends.
 
    function Inside (S : Sample; First, Last : Natural) return Boolean is
      (S.Offset >= First and then S.Offset <= Last

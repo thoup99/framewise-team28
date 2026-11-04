@@ -54,6 +54,7 @@ procedure Table_Reader_Tests is
    procedure Test_Max_Samples;
    procedure Test_Audio_Rule;
    procedure Test_Tracks;
+   procedure Test_Timescale;
    procedure Test_Truncation;
    procedure Test_Every_Byte_Damaged;
    procedure Test_Real_File (Filename : String);
@@ -479,6 +480,44 @@ procedure Table_Reader_Tests is
       Rejected ("failure leaves no old results behind", Moov (Nothing));
    end Test_Tracks;
 
+   --  Week 3 step 1: the mdhd timescale, in both versions of the box.
+   procedure Test_Timescale is
+      Stbl : constant Byte_Array :=
+        Stsd ("jpeg") & Good_Stts & Good_Stsc & Good_Stsz & Good_Stco;
+
+      --  A video track whose mdia holds Mdhd in front of the hdlr.
+      function With_Mdhd (Mdhd : Byte_Array) return Byte_Array is
+        (Moov (Box ("trak", Box ("mdia", Mdhd & Hdlr ("vide")
+                                 & Box ("minf", Box ("stbl", Stbl))))));
+
+      --  Version 0: version/flags, creation, modification, timescale,
+      --  duration, language and quality. Version 1: the times are 8 bytes.
+      V0 : constant Byte_Array :=
+        Box ("mdhd", B32s (0, 0, 0) & B32s (15_360, 900) & B32 (0));
+      V1 : constant Byte_Array :=
+        Box ("mdhd", B32 (16#0100_0000#) & B32s (0, 0, 0) & B32s (0, 48_000, 0)
+             & B32s (0, 0));
+   begin
+      Accepted ("mdhd version 0", With_Mdhd (V0));
+      Check ("mdhd version 0 timescale", Ok and then T.Video.Timescale = 15_360);
+      Accepted ("mdhd version 1", With_Mdhd (V1));
+      Check ("mdhd version 1 timescale", Ok and then T.Video.Timescale = 48_000);
+      Accepted ("no mdhd", Good_File);
+      Check ("no mdhd leaves timescale 0", Ok and then T.Video.Timescale = 0);
+      Accepted ("mdhd timescale 0 is read as 0",
+                With_Mdhd (Box ("mdhd", B32s (0, 0, 0) & B32s (0, 900) & B32 (0))));
+      Check ("timescale 0 kept for step 4 to reject", Ok and then T.Video.Timescale = 0);
+
+      Rejected ("mdhd version 2", With_Mdhd (Box ("mdhd", B32 (16#0200_0000#)
+                                                 & B32s (0, 0, 0) & B32s (0, 0, 0))));
+      Rejected ("mdhd empty", With_Mdhd (Box ("mdhd", Nothing)));
+      Rejected ("mdhd v0 cut before timescale", With_Mdhd (Box ("mdhd", B32s (0, 0, 0))));
+      Rejected ("mdhd v1 cut before timescale",
+                With_Mdhd (Box ("mdhd", B32 (16#0100_0000#) & B32s (0, 0, 0) & B32 (0))));
+      Rejected ("mdhd timescale too large",
+                With_Mdhd (Box ("mdhd", B32s (0, 0, 0) & B32 (Too_Large))));
+   end Test_Timescale;
+
    --  Cut the file at every byte. With either File_Size, nothing is
    --  accepted until the moov is complete. Everything after it is unused.
    procedure Test_Truncation is
@@ -606,6 +645,7 @@ begin
    Test_Max_Samples;
    Test_Audio_Rule;
    Test_Tracks;
+   Test_Timescale;
    Test_Truncation;
    Test_Every_Byte_Damaged;
 
