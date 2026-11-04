@@ -24,7 +24,9 @@ package Timeline_View is
       Drag_Active     : Boolean := False;
       Drag_Name       : Ada.Strings.Unbounded.Unbounded_String;
       Drag_Start_X    : Adi.Core.Pixel_Type := 0.0;
+      Drag_Current_X  : Adi.Core.Pixel_Type := 0.0;
       Drag_Start_Time : Long_Float := 0.0;
+      Drag_Trim_Left  : Boolean := False;
       Drag_Trim_Right : Boolean := False;
       Drag_Src_In     : Long_Float := 0.0;
       Drag_Src_Out    : Long_Float := 0.0;
@@ -38,6 +40,10 @@ package Timeline_View is
       X, Y   : Adi.Core.Pixel_Type;
       Button : Adi.Core.Mouse_Button;
       Clicks : Natural := 1);
+
+   overriding procedure On_Mouse_Move
+      (W    : in out Track_Widget;
+       X, Y : Adi.Core.Pixel_Type);
 
    overriding procedure On_Mouse_Up
      (W      : in out Track_Widget;
