@@ -1,5 +1,6 @@
 with Ada.Text_IO;
 with GNAT.OS_Lib;
+with Framewise.Decode;
 
 package body Framewise.Session is
 
@@ -30,14 +31,70 @@ package body Framewise.Session is
       Ok : Boolean := False;
    begin
       case C.K is
-         when Import =>
+                  when Import =>
             if C.Length = 0 then
-               Set (R, False, "err length must be > 0 (probe is a milestone)");
-               return;
+               declare
+                  Length     : Duration_T;
+                  Has_Video  : Boolean;
+                  Has_Audio  : Boolean;
+                  Probe_Ok   : Boolean;
+                  Media      : Timeline.Media_Kind;
+                  Proxy_File : constant String :=
+                    Image (C.File) & ".proxy.mov";
+               begin
+                  Framewise.Decode.Probe
+                    (Proxy_File,
+                     Length,
+                     Has_Video,
+                     Has_Audio,
+                     Probe_Ok);
+
+                  if not Probe_Ok then
+                     Set
+                       (R,
+                        False,
+                        "err cannot probe " & Proxy_File);
+                     return;
+                  end if;
+
+                  if Has_Video and Has_Audio then
+                     Media := Timeline.Both;
+                  elsif Has_Video then
+                     Media := Timeline.Video;
+                  elsif Has_Audio then
+                     Media := Timeline.Audio;
+                  else
+                     Set
+                       (R,
+                        False,
+                        "err proxy has no supported media tracks");
+                     return;
+                  end if;
+
+                  Add_Source
+                    (S.Seq,
+                     C.Src_Name,
+                     C.File,
+                     Length,
+                     Media,
+                     Ok);
+               end;
+            else
+               Add_Source
+                 (S.Seq,
+                  C.Src_Name,
+                  C.File,
+                  C.Length,
+                  To_TL (C.Src_Kind),
+                  Ok);
             end if;
-            Add_Source (S.Seq, C.Src_Name, C.File, C.Length, To_TL (C.Src_Kind), Ok);
+
             if not Ok then
-               Set (R, False, "err source exists or table full"); return;
+               Set
+                 (R,
+                  False,
+                  "err source exists or table full");
+               return;
             end if;
          when Commands.Track =>
             Add_Track (S.Seq, C.Trk_Name, To_TL (C.Trk_Kind), Ok);
@@ -176,21 +233,48 @@ package body Framewise.Session is
       end;
    end Do_Plan;
 
-   --  Run one line through sh -c so quoting survives. Found = False when
-   --  there is no shell on the PATH.
-   procedure Run_Shell (Cmd : String; Status : out Integer; Found : out Boolean) is
+      --  Run one line through the platform shell so quoting survives.
+   --  Prefer sh on Unix-like systems and fall back to cmd.exe on Windows.
+   procedure Run_Shell
+     (Cmd    : String;
+      Status : out Integer;
+      Found  : out Boolean)
+   is
       use GNAT.OS_Lib;
-      Args : Argument_List_Access :=
-        new Argument_List'(new String'("-c"), new String'(Cmd));
-      Sh   : String_Access := Locate_Exec_On_Path ("sh");
+
+      Shell : String_Access := Locate_Exec_On_Path ("sh");
    begin
       Status := -1;
-      Found := Sh /= null;
-      if Found then
-         Status := Spawn (Sh.all, Args.all);
-         Free (Sh);
+
+      if Shell /= null then
+         declare
+            Args : Argument_List_Access :=
+              new Argument_List'(new String'("-c"), new String'(Cmd));
+         begin
+            Status := Spawn (Shell.all, Args.all);
+            Free (Args);
+            Free (Shell);
+            Found := True;
+            return;
+         end;
       end if;
-      Free (Args);
+
+      Shell := Locate_Exec_On_Path ("cmd.exe");
+
+      if Shell /= null then
+         declare
+            Args : Argument_List_Access :=
+              new Argument_List'(new String'("/C"), new String'(Cmd));
+         begin
+            Status := Spawn (Shell.all, Args.all);
+            Free (Args);
+            Free (Shell);
+            Found := True;
+            return;
+         end;
+      end if;
+
+      Found := False;
    end Run_Shell;
 
    --  The proxy is the file the editor actually reads: intra-only video

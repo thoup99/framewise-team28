@@ -3,7 +3,7 @@
 --
 --  Times are seconds as decimals on the wire ("12.5"), ticks inside.
 --
---    import   NAME FILE LENGTH [video|audio|both]   register a source
+--    import   NAME FILE [LENGTH [video|audio|both]]   register a source
 --    track    NAME [video|audio|both]               default video
 --    place    CLIP TRACK SOURCE IN OUT AT            clip of SOURCE [IN,OUT) at AT
 --    move     CLIP AT

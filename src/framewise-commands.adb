@@ -254,10 +254,29 @@ package body Framewise.Commands with SPARK_Mode => Off is
          Verb : constant String := Lower (Tok (1));
       begin
          if Verb = "import" then
-            Need (4, 5); Get_Name (2, 1); Get_Path (3); Get_Time (4, 1); Get_Kind (5, Both);
-            if G then
-               C := (K => Import, Src_Name => Names (1), File => Pth, Length => Times (1),
+            if N = 3 then
+               Get_Name (2, 1);
+               Get_Path (3);
+               if G then
+                  C := (K => Import,
+                     Src_Name => Names (1),
+                     File => Pth,
+                     Length => 0,
+                     Src_Kind => Both);
+               end if;
+            else
+               Need (4, 5);
+               Get_Name (2, 1);
+               Get_Path (3);
+               Get_Time (4, 1);
+               Get_Kind (5, Both);
+               if G then
+                  C := (K => Import,
+                     Src_Name => Names (1),
+                     File => Pth,
+                     Length => Times (1),
                      Src_Kind => Kd);
+               end if;
             end if;
          elsif Verb = "track" then
             Need (2, 3); Get_Name (2, 1); Get_Kind (3, Video);

@@ -161,7 +161,11 @@ procedure Tests is
       Round_Trip ("settings 1280 720 30");
       Round_Trip ("proxy a");
       Parse ("import a a.mp4", C, Ok, Err, Last);
-      Check ("import needs length", not Ok);
+      Check
+         ("import without length",
+         Ok
+         and then C.K = Import
+         and then C.Length = 0);
       Parse ("place c1 v1 a 2 8.5", C, Ok, Err, Last);
       Check ("place needs 6 args", not Ok);
       Parse ("track v1 sideways", C, Ok, Err, Last);
