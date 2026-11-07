@@ -55,6 +55,8 @@ procedure Framewise_UI is
    Import_Dialog : Adi.Widget.Dialog.Dialog_Handle;
    Zoom_In, Zoom_Out, Scroll_Left, Scroll_Right : Adi.Widget.Button.Button_Handle;
    View_Status : Adi.Widget.Label.Label_Handle;
+   Razor_Button : Adi.Widget.Button.Button_Handle;
+   Tool_Status  : Adi.Widget.Label.Label_Handle;
    use type Timeline_View.Views.Handle;
    Import_Name : Adi.Widget.Text_Input.Text_Input_Handle;
    Import_File : Adi.Widget.Text_Input.Text_Input_Handle;
@@ -167,6 +169,19 @@ procedure Framewise_UI is
       Refresh_Log;
    end Execute_Line;
 
+      procedure Clip_Selected (Name : String) is
+   begin
+      if Name'Length > 0 then
+         Set_Focus (W, +Tracks);
+         Adi.Widget.Label.Set_Text
+           (Status, "Selected: " & Name & " | Delete to remove");
+      else
+         Adi.Widget.Label.Set_Text (Status, "No clip selected");
+      end if;
+
+      Mark_Dirty (+Tracks);
+   end Clip_Selected;
+
    procedure Submit is
       use Ada.Strings.Fixed;
       Line : constant String := Trim
@@ -261,6 +276,19 @@ procedure Framewise_UI is
       Mark_Dirty (+Tracks);
    end Change_View;
 
+   procedure Toggle_Razor (Button : Widget_Handle) is
+      pragma Unreferenced (Button);
+      V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+   begin
+      V.Razor_Mode := not V.Razor_Mode;
+
+      Adi.Widget.Label.Set_Text
+        (Tool_Status,
+         (if V.Razor_Mode
+          then "Razor ON - click a clip to split"
+          else "Razor OFF - drag to move or trim"));
+   end Toggle_Razor;
+
    procedure Key_Down
      (Scancode : Adi.SDL.Events.SDL_Scancode;
       Keycode  : Adi.SDL.Events.SDL_Keycode;
@@ -268,16 +296,66 @@ procedure Framewise_UI is
       Repeat   : Boolean;
       Handled  : in out Boolean)
    is
-      pragma Unreferenced (Keycode, Key_Mod);
+      pragma Unreferenced (Keycode);
+      use type Adi.SDL.Events.SDL_Keymod;
    begin
-      if not Repeat
-        and then (Scancode = Adi.SDL.Events.SDL_SCANCODE_RETURN)
+      if Repeat then
+         return;
+      end if;
+
+      if Scancode = Adi.SDL.Events.SDL_SCANCODE_RETURN
         and then Get_Focus_Handle (W) = Widget_Handle'(+Command_Field)
       then
          Handled := True;
          Submit;
+
+      elsif Get_Focus_Handle (W) = Widget_Handle'(+Tracks) then
+
+         --  Ctrl+Z undoes the last editing command.
+         if Scancode = Adi.SDL.Events.SDL_SCANCODE_Z
+           and then
+             (Key_Mod and Adi.SDL.Events.SDL_KMOD_CTRL) /= 0
+         then
+            Handled := True;
+            Execute_Line ("undo");
+
+         --  Delete removes the selected clip.
+         elsif Scancode = Adi.SDL.Events.SDL_SCANCODE_DELETE then
+            declare
+               Selected : US.Unbounded_String :=
+                 US.Null_Unbounded_String;
+            begin
+               declare
+                  V : Timeline_View.Views.Ref :=
+                    Timeline_View.Views.Borrow (Tracks);
+               begin
+                  if not V.Razor_Mode then
+                     Selected := V.Selected_Clip;
+                  end if;
+               end;
+
+               if US.Length (Selected) > 0 then
+                  Handled := True;
+                  Execute_Line ("delete " & US.To_String (Selected));
+
+                  if Reply.Ok then
+                     declare
+                        V : Timeline_View.Views.Ref :=
+                          Timeline_View.Views.Borrow (Tracks);
+                     begin
+                        V.Selected_Clip := US.Null_Unbounded_String;
+                     end;
+
+                     Adi.Widget.Label.Set_Text
+                       (Status, "Clip deleted. Ctrl+Z to undo.");
+                     Mark_Dirty (+Tracks);
+                  end if;
+               end if;
+            end;
+         end if;
       end if;
    end Key_Down;
+
 
 begin
    A.Init;
@@ -309,13 +387,19 @@ begin
          Adi.Widget.Label.Create_Handle ("Kind (video / audio / both): ");
    begin
       Tracks := Timeline_View.Views.New_Widget;
+      Set_Flag (+Tracks, Clickable, True);
+      Set_Flag (+Tracks, Focusable, True);
       declare
          V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
       begin
          V.Read_Sequence := Read_Sequence'Unrestricted_Access;
+         V.Submit_Command := Execute_Line'Unrestricted_Access;
+         V.Selection_Changed := Clip_Selected'Unrestricted_Access;
       end;
       Sources := Adi.Widget.Text_Editor.Create_Handle ("Sources");
       Adi.Widget.Text_Editor.Set_Read_Only (Sources);
+      Razor_Button := Adi.Widget.Button.Create_Handle ("Razor Mode");
+      Tool_Status := Adi.Widget.Label.Create_Handle ("Razor OFF");
       Zoom_In := Adi.Widget.Button.Create_Handle ("Zoom +");
       Zoom_Out := Adi.Widget.Button.Create_Handle ("Zoom -");
       Scroll_Left := Adi.Widget.Button.Create_Handle ("Earlier 5s");
@@ -362,6 +446,8 @@ begin
       Style_Button (Import_Button);
       Style_Button (Zoom_In);
       Style_Button (Zoom_Out);
+      Style_Button (Razor_Button);
+      Set_Part_Style (+Tool_Status, Label_Part, Style.Base (Text_Style).Build);
       Style_Button (Scroll_Left);
       Style_Button (Scroll_Right);
       Style_Input (Command_Field);
@@ -387,6 +473,9 @@ begin
       Set_Part_Style (+Tracks, Label_Part, Style.Base (Text_Style).Build);
       Set_Part_Style (+Tracks, Indicator_Part, Style.Base
         ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
+      Set_Part_Style (+Tracks, Selected_Part, Style.Base
+         ((Background_Color => Set_Bg (RGB (230, 158, 48)),
+            others => <>)).Build);
       Set_Part_Style (+View_Row, Main_Part, Style.Base (Input_Row_Style).Build);
       Set_Part_Style (+View_Status, Label_Part, Style.Base (Text_Style).Build);
       Set_Part_Style
@@ -408,6 +497,7 @@ begin
       Adi.Widget.Button.Connect_Clicked (Zoom_Out, Change_View'Unrestricted_Access);
       Adi.Widget.Button.Connect_Clicked (Scroll_Left, Change_View'Unrestricted_Access);
       Adi.Widget.Button.Connect_Clicked (Scroll_Right, Change_View'Unrestricted_Access);
+      Adi.Widget.Button.Connect_Clicked (Razor_Button, Toggle_Razor'Unrestricted_Access);
       Connect_Key_Down (W, Key_Down'Unrestricted_Access);
 
       Add_Child (+Root, +Title);
@@ -418,6 +508,8 @@ begin
       Add_Child (+View_Row, +Zoom_In);
       Add_Child (+View_Row, +Scroll_Left);
       Add_Child (+View_Row, +Scroll_Right);
+      Add_Child (+View_Row, +Razor_Button);
+      Add_Child (+View_Row, +Tool_Status);
       Add_Child (+View_Row, +View_Status);
       Add_Child (+Import_Row, +Import_Name_Label);
       Add_Child (+Import_Row, +Import_Name);

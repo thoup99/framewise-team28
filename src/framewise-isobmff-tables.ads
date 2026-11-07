@@ -48,7 +48,11 @@ package Framewise.ISOBMFF.Tables with SPARK_Mode is
    type Chunk_Run_Array is array (Sample_Index range 1 .. Max_Samples) of Chunk_Run;
 
    --  stsz sizes, or chunk file offsets (stco or co64).
-   type Natural_Table is array (Sample_Index range 1 .. Max_Samples) of Natural;
+   type Natural_Table is array (Sample_Index range 1 .. Max_Samples) of Natural
+     with Default_Component_Value => 0;
+   --  The default makes a Raw_Tables variable start fully initialized,
+   --  like the other two arrays, whose records have defaults. SPARK
+   --  insists on that before a variable is passed as "in out".
 
    --  A *_Count says how many entries are valid, like size() on a Java
    --  ArrayList. Array items past that count mean nothing.
@@ -57,6 +61,11 @@ package Framewise.ISOBMFF.Tables with SPARK_Mode is
       Entry_Type     : Boxes.Box_Kind := "    ";
       --  Kept as well as Codec: 'sowt' and 'twos' are both PCM_S16 but
       --  have opposite byte orders, which audio decoding will need.
+
+      Timescale      : Natural := 0;
+      --  From mdhd: how many stts ticks make one second. 0 when the track
+      --  has no mdhd. Read_Tables does not reject 0; step 4 does, because
+      --  that is where the timescale is divided by.
 
       Time_Run_Count : Sample_Index := 0;
       Time_Runs      : Time_Run_Array;
@@ -98,7 +107,8 @@ package Framewise.ISOBMFF.Tables with SPARK_Mode is
    --  are skipped. Every table entry that fits the bounds is stored.
    --
    --  Ok = False, with all counts 0 and Codec = None, for: a missing or
-   --  truncated box; a table that does not fit Max_Samples; a table count
+   --  truncated box; an mdhd too short for its version, or with a version
+   --  other than 0 or 1; a table that does not fit Max_Samples; a table count
    --  that needs more bytes than its box has; a nonzero version or flags
    --  field in a table; an stsd with anything but one entry; an unknown
    --  codec; a second video or second audio track; or no video or audio

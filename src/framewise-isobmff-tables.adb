@@ -77,6 +77,12 @@ package body Framewise.ISOBMFF.Tables with SPARK_Mode is
       T        : in out Raw_Track;
       Ok       : out Boolean);
 
+   procedure Read_Timescale
+     (Data      : Byte_Array;
+      Mdia      : Box_Header;
+      Timescale : out Natural;
+      Ok        : out Boolean);
+
    --  "Global => null" says it uses no package-level variables. Any such
    --  contract also stops GNATprove from pasting the body into each
    --  caller for analysis. Here that pasting made it warn about the audio
@@ -103,6 +109,7 @@ package body Framewise.ISOBMFF.Tables with SPARK_Mode is
    begin
       T.Codec := None;
       T.Entry_Type := "    ";
+      T.Timescale := 0;
       T.Time_Run_Count := 0;
       T.Chunk_Run_Count := 0;
       T.Sample_Count := 0;
@@ -389,6 +396,49 @@ package body Framewise.ISOBMFF.Tables with SPARK_Mode is
       end if;
    end Read_Entry_Type;
 
+   --  mdhd: 1 byte version, 3 bytes flags, then the creation and
+   --  modification times, then the 4-byte timescale. The two times are 4
+   --  bytes each in version 0 and 8 bytes each in version 1, so the
+   --  timescale starts 12 or 20 bytes into the payload.
+   --  No mdhd at all is not an error here: Timescale stays 0 and step 4
+   --  rejects it. That keeps this package usable on tables alone.
+   procedure Read_Timescale
+     (Data      : Byte_Array;
+      Mdia      : Box_Header;
+      Timescale : out Natural;
+      Ok        : out Boolean)
+   is
+      Mdhd  : Box_Header;
+      Skip  : Natural;
+      Found : Boolean;
+   begin
+      Timescale := 0;
+
+      Find_Inside (Data, Mdia, "mdhd", Mdhd, Found);
+      if not Found then
+         Ok := True;
+         return;
+      end if;
+
+      Ok := False;
+      if Mdhd.Payload_Size < 4 then
+         return;
+      end if;
+
+      case Data (Mdhd.Payload_First) is
+         when 0      => Skip := 12;
+         when 1      => Skip := 20;
+         when others => return;
+      end case;
+
+      --  The 4 timescale bytes must be inside mdhd, not just inside Data.
+      if Mdhd.Payload_Size < Skip + 4 then
+         return;
+      end if;
+
+      Read_U32 (Data, Mdhd.Payload_First + Skip, Timescale, Ok);
+   end Read_Timescale;
+
    procedure Read_Stbl
      (Data     : Byte_Array;
       Mdia     : Box_Header;
@@ -492,13 +542,20 @@ package body Framewise.ISOBMFF.Tables with SPARK_Mode is
          Handler (I) := Character'Val (Natural (Data (Hdlr.Payload_First + 7 + I)));
       end loop;
 
+      --  A second track of a kind leaves Ok = False: Read_Tables rejects it.
       if Handler = "vide" then
          if Tables.Video.Codec = None then
-            Read_Stbl (Data, Mdia, False, Tables.Video, Ok);
+            Read_Timescale (Data, Mdia, Tables.Video.Timescale, Ok);
+            if Ok then
+               Read_Stbl (Data, Mdia, False, Tables.Video, Ok);
+            end if;
          end if;
       elsif Handler = "soun" then
          if Tables.Audio.Codec = None then
-            Read_Stbl (Data, Mdia, True, Tables.Audio, Ok);
+            Read_Timescale (Data, Mdia, Tables.Audio.Timescale, Ok);
+            if Ok then
+               Read_Stbl (Data, Mdia, True, Tables.Audio, Ok);
+            end if;
          end if;
       else
          Ok := True;  --  some other track, such as timecode: not for us

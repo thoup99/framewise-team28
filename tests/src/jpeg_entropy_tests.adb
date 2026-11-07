@@ -3,11 +3,13 @@ with Ada.Streams;
 with Ada.Streams.Stream_IO;
 with Ada.Text_IO;
 with Framewise.JPEG.Bits;
+with Framewise.JPEG.Blocks;
 with Framewise.JPEG.Tables;
 
 procedure JPEG_Entropy_Tests is
    use Framewise.JPEG;
    use Framewise.JPEG.Bits;
+   use Framewise.JPEG.Blocks;
    use Framewise.JPEG.Tables;
    Q : Quantization_Tables;
    H : Huffman_Tables;
@@ -207,6 +209,112 @@ begin
    Check ("high-bound entropy", Ok and then Value = 128);
    Read_Bits ([Positive'Last => 16#80#], S, 1, Value, Ok);
    Check ("high-bound exhaustion", not Ok);
+
+   --  Week 3 C: decode one entropy-coded 8x8 block.
+   declare
+      DC_Table : constant Huffman_Table :=
+        (Present => True,
+         Count   => 1,
+         Counts  => [1 => 1, others => 0],
+         Symbols => [1 => 3, others => 0],
+         Codes   => [1 => 0, others => 0],
+         Lengths => [1 => 1, others => 0]);
+
+      AC_Table : constant Huffman_Table :=
+        (Present => True,
+         Count   => 4,
+         Counts  => [2 => 3, 3 => 1, others => 0],
+         Symbols =>
+           [1 => 16#22#,
+            2 => 16#00#,
+            3 => 16#F0#,
+            4 => 16#02#,
+            others => 0],
+         Codes   =>
+           [1 => 0,
+            2 => 1,
+            3 => 2,
+            4 => 6,
+            others => 0],
+         Lengths =>
+           [1 => 2,
+            2 => 2,
+            3 => 2,
+            4 => 3,
+            others => 0]);
+
+      Coefficients : Coefficient_Array;
+      Predictor    : Integer := 7;
+      Block_State  : Reader;
+   begin
+      --  Bits:
+      --    DC code 0, size-3 value 101 = +5
+      --    AC code 00 = run 2, size 2
+      --    value 01 = -2
+      --    AC code 01 = EOB
+      Start (Block_State);
+
+      Decode_Block
+        ([16#51#, 16#40#],
+         Block_State,
+         DC_Table,
+         AC_Table,
+         Predictor,
+         Coefficients,
+         Ok);
+
+      Check
+        ("block DC predictor",
+         Ok
+         and then Predictor = 12
+         and then Coefficients (0) = 12);
+
+      Check
+        ("block AC run and sign extension",
+         Ok
+         and then Coefficients (1) = 0
+         and then Coefficients (2) = 0
+         and then Coefficients (3) = -2);
+
+      --  ZRL skips sixteen coefficients. The following value lands
+      --  at zigzag coefficient 17.
+      Predictor := 0;
+      Start (Block_State);
+
+      Decode_Block
+        ([16#5B#, 16#68#],
+         Block_State,
+         DC_Table,
+         AC_Table,
+         Predictor,
+         Coefficients,
+         Ok);
+
+      Check
+        ("block ZRL",
+         Ok
+         and then Predictor = 5
+         and then Coefficients (1) = 0
+         and then Coefficients (16) = 0
+         and then Coefficients (17) = 3);
+
+      --  A truncated entropy stream must fail instead of raising.
+      Predictor := 0;
+      Start (Block_State);
+
+      Decode_Block
+        ([16#50#],
+         Block_State,
+         DC_Table,
+         AC_Table,
+         Predictor,
+         Coefficients,
+         Ok);
+
+      Check
+        ("truncated block rejected",
+         not Ok and then Failed (Block_State));
+   end;
 
    if Ada.Command_Line.Argument_Count > 0 then
       Check_File (Ada.Command_Line.Argument (1));

@@ -32,6 +32,7 @@ jobs:
           ./bin/table_reader_tests
           ./bin/jpeg_header_tests
           ./bin/jpeg_entropy_tests
+          ./bin/parse_tests
       - name: CLI runs the example and round-trips the document
         run: |
           cd cli
@@ -57,6 +58,10 @@ jobs:
           python3 ../scripts/jpeg_reference.py /tmp/framewise-ref.jpg /tmp/framewise-ref.rgba
           ../tests/bin/jpeg_header_tests /tmp/framewise-ref.jpg
           ../tests/bin/jpeg_entropy_tests /tmp/framewise-ref.jpg
+      - name: Proxy samples match ffprobe
+        run: |
+          cd examples
+          sh ../tests/compare_samples.sh take1.mp4.proxy.mov
       - name: ui/ never reaches below Framewise.Session
         run: |
           ! grep -rEi 'with +Framewise\.(Timeline|Plan|Decode|Commands)' ui/ --include='*.ad?'
@@ -69,3 +74,41 @@ jobs:
       - name: Prove timeline operations
         run: |
           alr -n exec -- gnatprove -P framewise.gpr -u framewise-timeline.adb --mode=all --level=2 --report=all --output=oneline --checks-as-errors=on
+
+  gui-tests:
+    name: GUI interaction tests
+    runs-on: ubuntu-26.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Alire
+        uses: alire-project/setup-alire@v4
+
+      - name: Install GUI and FFmpeg dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libsdl3-dev \
+            libsdl3-ttf-dev \
+            libsdl3-image-dev \
+            libavformat-dev \
+            libavcodec-dev \
+            libavutil-dev \
+            libswscale-dev \
+            libswresample-dev
+
+      - name: Build GUI
+        working-directory: ui
+        run: alr -n build
+
+      - name: Build GUI tests
+        working-directory: ui
+        run: alr -n exec -- gprbuild -P ui_checks.gpr
+
+      - name: Run GUI interaction tests
+        working-directory: ui
+        env:
+          SDL_VIDEODRIVER: dummy
+        run: ./bin/timeline_view_tests
