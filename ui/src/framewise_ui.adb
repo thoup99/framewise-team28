@@ -11,6 +11,7 @@ with Adi.App;
 with Adi.Core; use Adi.Core;
 with Adi.CSS_Styles; use Adi.CSS_Styles;
 with Adi.Layout_Util;
+with Adi.Image;
 with Adi.OS;
 with Adi.SDL.Events;
 with Adi.SDL.Video;
@@ -78,7 +79,7 @@ procedure Framewise_UI is
    Captions : Label_Array;
    File_Button, Add_Track_Button, Place_Button, Undo_Button,
      Delete_Button, Razor_Button, Move_Button,
-     Zoom_In, Zoom_Out, Scroll_Left, Scroll_Right, Start_Button : Buttons.Button_Handle;
+     Zoom_In, Zoom_Out, Scroll_Left, Scroll_Right, Start_Button, Play_Button, End_Button : Buttons.Button_Handle;
    type Media_Filter is (All_Media, Video_Media, Audio_Media);
    type Filter_Button_Array is array (Media_Filter) of Buttons.Button_Handle;
    Filter_Buttons : Filter_Button_Array;
@@ -620,6 +621,18 @@ procedure Framewise_UI is
                V.Playhead := 0;
                V.First_Second := 0.0;
                Show_Preview (Timeline_View.Preview_Text (FS.Sequence_Of (Editor), V.Playhead));
+            elsif Button = Widget_Handle'(+End_Button) then
+               V.Playhead := 0;
+               for T of FS.Sequence_Of (Editor).Tracks loop
+                  if T.Used then
+                     for I in 1 .. T.Count loop
+                        V.Playhead := Framewise.Time'Max (V.Playhead,
+                          T.Clips (I).Start + T.Clips (I).Src_Out - T.Clips (I).Src_In);
+                     end loop;
+                  end if;
+               end loop;
+               V.First_Second := Long_Float'Max (0.0, Framewise.Seconds (V.Playhead) - 5.0);
+               Show_Preview (Timeline_View.Preview_Text (FS.Sequence_Of (Editor), V.Playhead));
             end if;
             Mark_Dirty (+Tracks);
          end;
@@ -714,9 +727,10 @@ begin
       null;
    end;
    declare
-      Root, Menu_Row, Filter_Row, Bin, Monitor, Lower, Timeline_Tools,
+      Root, Menu_Row, Filter_Row, Playback_Row, Bin, Monitor, Lower, Timeline_Tools,
         Placement_Row, Track_Scroll : Boxes.Box_Handle;
       Workspace, Main_Split : Editor_Split.Views.Handle;
+      Start_Icon, Play_Icon, End_Icon : Adi.Image.Image_Owner;
       package Mouse renames Adi.SDL.Mouse;
       use type Mouse.SDL_SystemCursor;
       use type Mouse.SDL_Cursor_Access;
@@ -770,7 +784,7 @@ begin
                  +Filter_Buttons (Video_Media), +Filter_Buttons (Audio_Media),
                  +File_Button, +Add_Track_Button, +Place_Button,
                  +Undo_Button, +Delete_Button, +Razor_Button, +Move_Button,
-                 +Zoom_In, +Zoom_Out, +Scroll_Left, +Scroll_Right, +Start_Button,
+                 +Zoom_In, +Zoom_Out, +Scroll_Left, +Scroll_Right, +Start_Button, +End_Button,
                  +Source_Choice, +Track_Choice, +Kind_Choice,
                  +Dialogs.Get_Button_Handle (Form, 1), +Dialogs.Get_Button_Handle (Form, 2),
                  +Dialogs.Get_Button_Handle (Confirm, 1), +Dialogs.Get_Button_Handle (Confirm, 2)];
@@ -806,6 +820,7 @@ begin
       Root := Boxes.Create_Handle;
       Menu_Row := Boxes.Create_Handle;
       Filter_Row := Boxes.Create_Handle;
+      Playback_Row := Boxes.Create_Handle;
       Lower := Boxes.Create_Handle;
       Bin := Boxes.Create_Handle;
       Monitor := Boxes.Create_Handle;
@@ -862,12 +877,43 @@ begin
         ((Flex_Grow => Set (1.0), Height => Set (Size (Px (0.0))), Min_Height => Set (Size (Px (40.0))),
           Padding => Set (CSS_Box (Px (24.0))),
           Background_Color => Set_Bg (RGB (0, 0, 0)), others => <>)).Build);
-      Start_Button := Make_Button (+Monitor, "Go to Start");
-      Set_Part_Style (+Start_Button, Main_Part, Style.Base
-        ((Width => Set (Size (Px (130.0))),
-          Background_Color => Set_Bg (RGB (38, 50, 67)),
-          Padding => Set (CSS_Box (Px (7.0), Px (10.0))), others => <>)).Build);
-      Add_Label (+Monitor, "Drag the timeline ruler to scrub. Playback is not available yet.");
+      Set_Part_Style (+Playback_Row, Main_Part, Style.Base
+        ((Row_Style with delta Justify_Content => Set (Justify_Content_Value'(Center)),
+          Align_Items => Set (Align_Items_Value'(Center)))).Build);
+      Add_Child (+Monitor, +Playback_Row);
+      Start_Icon := Adi.Image.Load_SVG_Path
+        ("M10 3 L2 10 L10 17 Z M19 3 L11 10 L19 17 Z", (20.0, 20.0),
+         Fill => (220, 230, 245, 255));
+      Play_Icon := Adi.Image.Load_SVG_Path
+        ("M2 3 L10 10 L2 17 Z M13 3 H15 V17 H13 Z M18 3 H20 V17 H18 Z",
+         (22.0, 20.0), Fill => (120, 135, 155, 255));
+      End_Icon := Adi.Image.Load_SVG_Path
+        ("M2 3 L10 10 L2 17 Z M11 3 L19 10 L11 17 Z", (20.0, 20.0),
+         Fill => (220, 230, 245, 255));
+      Start_Button := Make_Button (+Playback_Row, "");
+      Play_Button := Make_Button (+Playback_Row, "");
+      End_Button := Make_Button (+Playback_Row, "");
+      Buttons.Set_Icon (Start_Button, Adi.Image.To_Handle (Start_Icon));
+      Buttons.Set_Icon (Play_Button, Adi.Image.To_Handle (Play_Icon));
+      Buttons.Set_Icon (End_Button, Adi.Image.To_Handle (End_Icon));
+      declare
+         Transport : constant array (1 .. 3) of Buttons.Button_Handle :=
+           [Start_Button, Play_Button, End_Button];
+      begin
+         for H of Transport loop
+            Set_Part_Style (+H, Main_Part, Style.Base
+              ((Display => Set (Flex), Flex_Direction => Set (Row),
+                Justify_Content => Set (Justify_Content_Value'(Center)),
+                Align_Items => Set (Align_Items_Value'(Center)),
+                Width => Set (Size (Px (44.0))), Height => Set (Size (Px (36.0))),
+                Flex_Shrink => Set (0.0),
+                Background_Color => Set_Bg (RGB (38, 50, 67)), others => <>)).Build);
+            Set_Part_Style (+H, Icon_Part, Style.Base
+              ((Width => Set (Size (Px (22.0))), Height => Set (Size (Px (20.0))), others => <>)).Build);
+         end loop;
+      end;
+      --  Playback is intentionally unavailable until the media milestone.
+      Set_State (+Play_Button, State_Disabled, True);
       Add_Child (+Workspace, +Bin);
       Add_Child (+Workspace, +Monitor);
       Add_Track_Button := Make_Button (+Timeline_Tools, "Add Track");

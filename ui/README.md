@@ -49,11 +49,12 @@ to reach tracks below the viewport. It hides when all tracks fit.
    toggles the split tool and lights up blue while active. A vertical guide
    follows the pointer inside clips to show the split position; click to split. **Delete Clip**
    and **Undo** are also available as buttons.
-5. Drag the ruler to scrub. **Go to Start**, **Earlier**, **Later**, and
-   **Zoom +/-** change the view. The black preview area currently displays
-   the active clip name and timeline time. Decoded frames, thumbnails,
-   playback and automatic proxy generation remain deferred; there are no
-   pretend playback/effect controls.
+5. Drag the ruler to scrub. The centered double-left and double-right
+   playback controls move to the beginning and current project end. The
+   play/pause control is disabled until playback is implemented. **Earlier**,
+   **Later**, and **Zoom +/-** change the view. The black preview area
+   currently displays the active clip name and timeline time. Decoded frames,
+   thumbnails, playback and automatic proxy generation remain deferred.
 6. Use **File > Save** to save to the current document.
    The first save asks for a location. **File > Save As** saves a separate
    `.fw` file and makes it the current document. The window title displays `Framewise` followed by the project name. New, Open and Exit ask before
