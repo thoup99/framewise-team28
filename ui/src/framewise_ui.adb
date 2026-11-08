@@ -13,6 +13,9 @@ with Adi.CSS_Styles; use Adi.CSS_Styles;
 with Adi.Layout_Util;
 with Adi.OS;
 with Adi.SDL.Events;
+with Adi.SDL.Video;
+with Interfaces.C.Extensions;
+with Interfaces.C.Strings;
 with Adi.Widget; use Adi.Widget;
 with Adi.Widget.Box;
 with Adi.Widget.Button;
@@ -60,7 +63,7 @@ procedure Framewise_UI is
    Editor : FS.Session;
    Reply : FS.Response;
    Tracks : Timeline_View.Views.Handle;
-   Preview, Status, Project_Title, Tool_Status : Labels.Label_Handle;
+   Preview, Status, Tool_Status : Labels.Label_Handle;
    Sources : Adi.Widget.Text_Editor.Text_Editor_Handle;
    Source_Choice, Track_Choice, Kind_Choice : Combos.Combo_Box_Handle;
    File_Menu : Menus.Menu_Handle;
@@ -72,9 +75,8 @@ procedure Framewise_UI is
    Values : Input_Array;
    type Label_Array is array (Positive range 1 .. 3) of Labels.Label_Handle;
    Captions : Label_Array;
-   File_Button, New_Button, Open_Button, Save_Button, Import_Button,
-     Export_Button, Add_Track_Button, Place_Button, Undo_Button,
-     Delete_Button, Razor_Button, Move_Button, Properties_Button, Settings_Button,
+   File_Button, Add_Track_Button, Place_Button, Undo_Button,
+     Delete_Button, Razor_Button, Move_Button, Properties_Button,
      Zoom_In, Zoom_Out, Scroll_Left, Scroll_Right, Start_Button : Buttons.Button_Handle;
    type Form_Mode is (Import_Media, Add_Track, Place_Clip, Edit_Clip, Move_Clip, Project_Settings);
    Mode : Form_Mode := Import_Media;
@@ -111,13 +113,22 @@ procedure Framewise_UI is
       return Result;
    end History;
 
+   --  The pinned toolkit exposes the SDL window but has no title setter.
+   function Set_Window_Title
+     (Window : Adi.SDL.Video.SDL_Window_Ptr;
+      Title : Interfaces.C.Strings.chars_ptr) return Interfaces.C.Extensions.bool
+     with Import, Convention => C, External_Name => "SDL_SetWindowTitle";
+
    procedure Update_Title is
+      Title : Interfaces.C.Strings.chars_ptr := Interfaces.C.Strings.New_String
+        ("Framewise" & (if US.Length (Project_Path) = 0 then "" else
+          " " & Ada.Directories.Base_Name (US.To_String (Project_Path))));
+      Updated : constant Interfaces.C.Extensions.bool :=
+        Set_Window_Title (Get_SDL_Window (W), Title);
+      pragma Unreferenced (Updated);
    begin
       Dirty := History /= Saved_History;
-      Labels.Set_Text (Project_Title,
-        (if Dirty then "* " else "") &
-        (if US.Length (Project_Path) = 0 then "Untitled Project"
-         else Ada.Directories.Simple_Name (US.To_String (Project_Path))) & " - Framewise");
+      Interfaces.C.Strings.Free (Title);
    end Update_Title;
 
    procedure Style_Button (H : Buttons.Button_Handle) is
@@ -489,16 +500,6 @@ procedure Framewise_UI is
          begin
             Menus.Show_At (File_Menu, G.X, G.Y + G.Height, 230.0);
          end;
-      elsif Button = Widget_Handle'(+New_Button) then
-         Request_Action (New_Project);
-      elsif Button = Widget_Handle'(+Open_Button) then
-         Request_Action (Open_Project);
-      elsif Button = Widget_Handle'(+Save_Button) then
-         Save_Project;
-      elsif Button = Widget_Handle'(+Import_Button) then
-         Adi.OS.Show_Open_File_Dialog (Import_Selected'Unrestricted_Access, W);
-      elsif Button = Widget_Handle'(+Export_Button) then
-         Adi.OS.Show_Save_File_Dialog (Export_Selected'Unrestricted_Access, W, Default_Location => "out.mp4");
       elsif Button = Widget_Handle'(+Undo_Button) then
          Execute_Line ("undo");
       elsif Button = Widget_Handle'(+Delete_Button) then
@@ -549,15 +550,6 @@ procedure Framewise_UI is
             end loop;
          end loop;
          Tell ("Select a timeline clip first.");
-      elsif Button = Widget_Handle'(+Settings_Button) then
-         declare
-         begin
-            Prepare_Form (Project_Settings, "Project Settings");
-            Set_Field (1, "Width (pixels)", FS.Settings_Of (Editor).Width'Image);
-            Set_Field (2, "Height (pixels)", FS.Settings_Of (Editor).Height'Image);
-            Set_Field (3, "Frames per second", FS.Settings_Of (Editor).FPS'Image);
-            Dialogs.Show (Form);
-         end;
       else
          declare
             V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
@@ -590,13 +582,19 @@ procedure Framewise_UI is
       pragma Unreferenced (Menu, Text);
    begin
       case Index is
-         when 1 => Clicked (+New_Button);
-         when 2 => Clicked (+Open_Button);
+         when 1 => Request_Action (New_Project);
+         when 2 => Request_Action (Open_Project);
          when 3 => Save_Project;
          when 4 => Save_Project (True);
-         when 5 => Clicked (+Import_Button);
-         when 6 => Clicked (+Settings_Button);
-         when 7 => Clicked (+Export_Button);
+         when 5 => Adi.OS.Show_Open_File_Dialog (Import_Selected'Unrestricted_Access, W);
+         when 6 =>
+            Prepare_Form (Project_Settings, "Project Settings");
+            Set_Field (1, "Width (pixels)", FS.Settings_Of (Editor).Width'Image);
+            Set_Field (2, "Height (pixels)", FS.Settings_Of (Editor).Height'Image);
+            Set_Field (3, "Frames per second", FS.Settings_Of (Editor).FPS'Image);
+            Dialogs.Show (Form);
+         when 7 => Adi.OS.Show_Save_File_Dialog
+           (Export_Selected'Unrestricted_Access, W, Default_Location => "out.mp4");
          when 8 => Request_Action (Close_Editor);
          when others => null;
       end case;
@@ -661,13 +659,12 @@ begin
    A.Set_Target_FPS (60);
    W := Create_Window_Handle ("Framewise", Adi.Window.Extent (Px (1280.0), Px (850.0)));
    declare
-      Root, Menu_Row, Toolbar, Bin, Monitor, Lower, Timeline_Tools,
+      Root, Menu_Row, Bin, Monitor, Lower, Timeline_Tools,
         Placement_Row, Track_Scroll : Boxes.Box_Handle;
       Workspace, Main_Split : Editor_Split.Views.Handle;
    begin
       Root := Boxes.Create_Handle;
       Menu_Row := Boxes.Create_Handle;
-      Toolbar := Boxes.Create_Handle;
       Lower := Boxes.Create_Handle;
       Bin := Boxes.Create_Handle;
       Monitor := Boxes.Create_Handle;
@@ -680,7 +677,7 @@ begin
         ((Panel_Style with delta Overflow_Y => Set (Overflow_Auto))).Build);
       Set_Part_Style (+Root, Main_Part, Style.Base (Panel_Style).Build);
       declare
-         Rows : constant Box_Array := [Menu_Row, Toolbar, Timeline_Tools, Placement_Row];
+         Rows : constant Box_Array := [Menu_Row, Timeline_Tools, Placement_Row];
       begin
          for H of Rows loop
             Set_Part_Style (+H, Main_Part, Style.Base
@@ -694,13 +691,6 @@ begin
       Set_Part_Style (+Monitor, Main_Part, Style.Base
         ((Panel_Style with delta Flex_Grow => Set (1.0), Overflow_Y => Set (Overflow_Auto))).Build);
       File_Button := Make_Button (+Menu_Row, "File");
-      Project_Title := Make_Label (+Menu_Row, "Untitled Project - Framewise");
-      New_Button := Make_Button (+Toolbar, "New Project");
-      Open_Button := Make_Button (+Toolbar, "Open Project");
-      Import_Button := Make_Button (+Toolbar, "Import Files");
-      Save_Button := Make_Button (+Toolbar, "Save Project");
-      Settings_Button := Make_Button (+Toolbar, "Project Settings");
-      Export_Button := Make_Button (+Toolbar, "Export Video");
       Add_Label (+Bin, "Project Files");
       Sources := Adi.Widget.Text_Editor.Create_Handle ("");
       Adi.Widget.Text_Editor.Set_Read_Only (Sources);
@@ -799,7 +789,6 @@ begin
       Set_Part_Style (+Main_Split, Indicator_Part, Style.Base
         ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
       Add_Child (+Root, +Menu_Row);
-      Add_Child (+Root, +Toolbar);
       Add_Child (+Root, +Main_Split);
       Status := Make_Label (+Root, "Ready. Import files and add a track, or open a .fw project.");
 

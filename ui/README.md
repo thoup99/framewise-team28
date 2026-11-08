@@ -1,7 +1,6 @@
 # Framewise desktop editor
 
-The editor uses a traditional layout inspired by OpenShot: a File menu and
-project toolbar at the top, Project Files on the left, Video Preview on the
+The editor uses a traditional layout inspired by OpenShot: a File menu at the top, Project Files on the left, Video Preview on the
 right, and a full-width timeline below. No command entry or command history
 panel is shown. The shared Session command protocol is an implementation
 detail; users edit through menus, buttons, dialogs and timeline gestures.
@@ -35,10 +34,9 @@ for the current session and do not modify the project document.
    the active clip name and timeline time. Decoded frames, thumbnails,
    playback and automatic proxy generation remain deferred; there are no
    pretend playback/effect controls.
-6. Use **Save Project** or **File > Save** to save to the current document.
+6. Use **File > Save** to save to the current document.
    The first save asks for a location. **File > Save As** saves a separate
-   `.fw` file and makes it the current document. An asterisk beside the
-   project name indicates unsaved edits. New, Open and Exit ask before
+   `.fw` file and makes it the current document. The window title displays `Framewise` followed by the project name. New, Open and Exit ask before
    discarding changes; Cancel returns to the editor so they can be saved.
 7. **Project Settings** edits the existing width, height and FPS settings.
    **Export Video** asks for an output path and uses the existing ffmpeg
@@ -92,7 +90,7 @@ Manual regression:
   adding an edit or marking the project dirty.
 - Save a new project, edit and Save, then Save As. Reopen both files to
   verify their independent contents. Undo back to the saved state and
-  verify the asterisk clears. Cancel the native Save/Open/Import dialogs
+  verify New/Open no longer prompts to discard changes. Cancel the native Save/Open/Import dialogs
   and verify the current project is retained.
 - Edit, then try New/Open/Exit. Cancel the discard prompt, save, and retry.
 - Open `examples/cut.fw`, move c3 to 13.5 seconds, reject an overlapping
