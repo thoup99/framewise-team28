@@ -240,6 +240,8 @@ procedure Framewise_UI is
       Set_Part_Style (+Tracks, Main_Part, Style.Base
         ((Height => Set (Size (Px (Float (Natural'Max (Rows, 1) * 48 + 36)))),
           Flex_Grow => Set (1.0), Flex_Shrink => Set (0.0),
+          --  Keep the clickable timeline out of its parent's scrollbar gutter.
+          Margin => Set_Margin (CSS_Box (Px (0.0), Px (16.0), Px (0.0), Px (0.0))),
           Background_Color => Set_Bg (RGB (29, 38, 51)), others => <>)).Build);
       Update_Title;
       Mark_Dirty (+Tracks);
@@ -903,6 +905,9 @@ begin
         ((Flex_Grow => Set (1.0), Min_Height => Set (Size (Px (80.0))),
           Overflow_Y => Set (Overflow_Auto), others => <>)).Build);
       Set_Flag (+Track_Scroll, Scrollable, True);
+      --  Route presses in the gutter to the scroll container rather than
+      --  the clickable split pane ancestor.
+      Set_Flag (+Track_Scroll, Clickable, True);
       Set_Part_Style (+Track_Scroll, Scroll_Part, Style.Base
         ((Width => Set (Size (Px (14.0))),
           Background_Color => Set_Bg (RGB (22, 29, 40)), others => <>)).Build);
