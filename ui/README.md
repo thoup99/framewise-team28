@@ -1,10 +1,9 @@
 # ui: the contract
 
-Week 2 provides the command bar, a read-only graphical timeline with
-zoom/scroll, a source list, and file-picker import with explicit duration.
-See [WEEK2_REVIEW.md](WEEK2_REVIEW.md) for build and verification steps.
-Mouse editing remains week 3 work. The GUI obeys these three rules; CI
-checks the first one.
+The timeline supports clip movement, trimming, splitting, deletion and undo.
+Drag the time ruler to scrub. The preview shows the active video clip and
+timeline time, or “No video clip” in a gap. Scrubbing is local to the UI and
+adds no edit to undo or save. The GUI follows three rules.
 
 1. **Nothing in `ui/` withs anything below `Framewise.Session`.** The
    GUI sees `Framewise.Session` (Execute, Sequence_Of, Settings_Of,
@@ -42,3 +41,11 @@ until it touches `c2`, read the bar: `move c3 13.5`. Drag it onto
 overlap`, and nothing moved. Press Export, get `out.mp4`. Then do the
 same session in `framewise_cli` by typing, and diff the two saved
 `.fw` files: identical.
+
+For the export check, run the GUI and CLI from the directory containing
+`take1.mp4`, `take2.mp4`, and `music.wav` so the relative paths in
+`cut.fw` resolve. With the example loaded, scrub to 6.5 s (a video gap)
+and 8.5 s (the start of c2). After the accepted and rejected moves above,
+press **Export out.mp4**, then enter `save gui.fw`. In a fresh CLI session,
+load the example, enter the same moves, then `save cli.fw`. Compare the
+files with `diff gui.fw cli.fw` or `fc /b gui.fw cli.fw` on Windows.

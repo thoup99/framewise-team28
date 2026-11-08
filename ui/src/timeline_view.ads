@@ -17,6 +17,9 @@ package Timeline_View is
       Submit_Command : Command_Callback := null;
       Zoom           : Long_Float := 32.0;
       First_Second   : Long_Float := 0.0;
+      Playhead       : Framewise.Time := 0;
+      Scrubbing      : Boolean := False;
+      Preview_Changed : Command_Callback := null;
       Razor_Mode : Boolean := False;
       Selected_Clip : Ada.Strings.Unbounded.Unbounded_String;
       Selection_Changed : Command_Callback := null;
@@ -31,6 +34,9 @@ package Timeline_View is
       Drag_Src_In     : Long_Float := 0.0;
       Drag_Src_Out    : Long_Float := 0.0;
    end record;
+
+   function Preview_Text
+     (Seq : Framewise.Session.Sequence_View; At_Time : Framewise.Time) return String;
 
    overriding procedure Layout (W : in out Track_Widget) is null;
    overriding procedure Build_Items (W : in out Track_Widget);

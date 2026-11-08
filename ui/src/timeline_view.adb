@@ -6,12 +6,53 @@ with Framewise;
 
 package body Timeline_View is
    use type Framewise.Time;
+   Gutter : constant Pixel_Type := 110.0;
+   Ruler_Height : constant Pixel_Type := 30.0;
+
+   function Preview_Text
+     (Seq : Framewise.Session.Sequence_View; At_Time : Framewise.Time) return String
+   is
+      use all type Framewise.Session.Media_Kind;
+      Stamp : constant String := Framewise.Session.Image_Time (At_Time) & " s";
+   begin
+      for Track of Seq.Tracks loop
+         --  Export uses the first populated video-capable track.
+         if Track.Used and then Natural (Track.Count) > 0 and then Track.Kind /= Audio then
+            for I in 1 .. Track.Count loop
+               declare
+                  C renames Track.Clips (I);
+               begin
+                  if At_Time >= C.Start and then At_Time - C.Start < C.Src_Out - C.Src_In then
+                     return Framewise.Image (C.N) & " | " & Stamp;
+                  end if;
+               end;
+            end loop;
+            exit;
+         end if;
+      end loop;
+      return "No video clip | " & Stamp;
+   end Preview_Text;
+
+   procedure Scrub_To (W : in out Track_Widget; X : Pixel_Type) is
+      G : constant Rectangle := Get_Geometry (W);
+      Offset : constant Pixel_Type :=
+        Pixel_Type'Max (0.0, Pixel_Type'Min (X - G.X, G.Width) - Gutter);
+   begin
+      W.Playhead := Framewise.Time
+        (Long_Float'Min (Long_Float (Framewise.Time'Last),
+         (W.First_Second + Long_Float (Offset) / W.Zoom) * Long_Float (Framewise.Timebase)));
+      if W.Preview_Changed /= null then
+         W.Preview_Changed.all (Preview_Text (W.Read_Sequence.all, W.Playhead));
+      end if;
+      Mark_Dirty (W);
+   end Scrub_To;
+
    overriding procedure Build_Items (W : in out Track_Widget) is
       use type Framewise.Time;
       G : constant Rectangle := Get_Geometry (W);
-      Left : constant Pixel_Type := G.X + 110.0;
+      Left : constant Pixel_Type := G.X + Gutter;
       Right : constant Pixel_Type := G.X + G.Width;
-      Y : Pixel_Type := G.Y + 30.0;
+      Y : Pixel_Type := G.Y + Ruler_Height;
 
       procedure Label (Area : Rectangle; Text : String) is
          I : Item := Make_Text (Label_Part, Area, Text, 2);
@@ -22,7 +63,7 @@ package body Timeline_View is
    begin
       Clear_Items (W);
       Add_Item (W, Make_Panel (Main_Part, G, 0));
-      if W.Read_Sequence = null or else G.Width <= 110.0 then
+      if W.Read_Sequence = null or else G.Width <= Gutter then
          return;
       end if;
       declare
@@ -155,6 +196,11 @@ package body Timeline_View is
                Y := Y + 48.0;
             end if;
          end loop;
+         X := Left + Pixel_Type ((Framewise.Seconds (W.Playhead) - W.First_Second) * W.Zoom);
+         if X >= Left and then X < Right then
+            Add_Item (W, Make_Panel (Selected_Part,
+              (X, G.Y, Pixel_Type'Min (2.0, Right - X), G.Height), 4));
+         end if;
          if not Any_Track then
             Label ((Left, Y, Right - Left, 30.0), "No tracks. Load a project below.");
          end if;
@@ -169,30 +215,32 @@ package body Timeline_View is
    is
       pragma Unreferenced (Clicks);
       G     : constant Rectangle := Get_Geometry (W);
-      Left  : constant Pixel_Type := G.X + 110.0;
+      Left  : constant Pixel_Type := G.X + Gutter;
       Right : constant Pixel_Type := G.X + G.Width;
-      Row_Y : Pixel_Type := G.Y + 30.0;
+      Row_Y : Pixel_Type := G.Y + Ruler_Height;
    begin
 
-   W.Drag_Active := False;
-   W.Drag_Trim_Left := False;
-   W.Drag_Trim_Right := False;
-
-   if not W.Razor_Mode then
-      W.Selected_Clip := Null_Unbounded_String;
-
-      if W.Selection_Changed /= null then
-         W.Selection_Changed.all ("");
-      end if;
-   end if;
-
-      if Button /= Left_Button
-        or else W.Read_Sequence = null
-        or else W.Zoom <= 0.0
-        or else X < Left
-        or else X > Right
-      then
+      if Button /= Left_Button then
          return;
+      end if;
+      W.Scrubbing := False;
+      W.Drag_Active := False;
+      W.Drag_Trim_Left := False;
+      W.Drag_Trim_Right := False;
+      if W.Read_Sequence = null or else W.Zoom <= 0.0 or else X < Left or else X > Right then
+         return;
+      end if;
+      if Y >= G.Y and then Y < Row_Y then
+         W.Scrubbing := True;
+         Scrub_To (W, X);
+         return;
+      end if;
+
+      if not W.Razor_Mode then
+         W.Selected_Clip := Null_Unbounded_String;
+         if W.Selection_Changed /= null then
+            W.Selection_Changed.all ("");
+         end if;
       end if;
 
       declare
@@ -321,7 +369,9 @@ package body Timeline_View is
    is
       pragma Unreferenced (Y);
    begin
-      if W.Drag_Active then
+      if W.Scrubbing then
+         Scrub_To (W, X);
+      elsif W.Drag_Active then
          W.Drag_Current_X := X;
          Mark_Dirty (W);
       end if;
@@ -335,6 +385,11 @@ package body Timeline_View is
       pragma Unreferenced (Y);
       New_Time : Long_Float;
    begin
+      if Button = Left_Button and then W.Scrubbing then
+         W.Scrubbing := False;
+         Scrub_To (W, X);
+         return;
+      end if;
       if Button /= Left_Button or else not W.Drag_Active then
          return;
       end if;

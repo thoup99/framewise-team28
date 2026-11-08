@@ -1,6 +1,5 @@
---  Framewise week 2: read-only tracks, sources and command-driven import.
---  The only Framewise dependency is Session. All edits and queries are
---  text lines submitted through Execute; the log is presentation state.
+--  Timeline edits go through Session.Execute. Scrubbing reads the current
+--  sequence and updates only the preview and playhead.
 pragma Ada_2022;
 
 with Ada.Characters.Latin_1;
@@ -49,6 +48,7 @@ procedure Framewise_UI is
 
    Command_Field : Adi.Widget.Text_Input.Text_Input_Handle;
    Output_Log    : Adi.Widget.Text_Editor.Text_Editor_Handle;
+   Preview       : Adi.Widget.Label.Label_Handle;
    Status        : Adi.Widget.Label.Label_Handle;
    Tracks : Timeline_View.Views.Handle;
    Sources : Adi.Widget.Text_Editor.Text_Editor_Handle;
@@ -125,11 +125,21 @@ procedure Framewise_UI is
 
    function Read_Sequence return FS.Sequence_View is (FS.Sequence_Of (Editor));
 
+   procedure Show_Preview (Text : String) is
+   begin
+      Adi.Widget.Label.Set_Text (Preview, Text);
+   end Show_Preview;
+
    procedure Refresh_Timeline is
       Seq : constant FS.Sequence_View := FS.Sequence_Of (Editor);
       Text : US.Unbounded_String := US.To_Unbounded_String ("Sources");
       Rows : Natural := 0;
    begin
+      declare
+         V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+      begin
+         Show_Preview (Timeline_View.Preview_Text (Seq, V.Playhead));
+      end;
       for Source of Seq.Sources loop
          if Source.Used then
             US.Append (Text, Ada.Characters.Latin_1.LF &
@@ -195,6 +205,12 @@ procedure Framewise_UI is
       Adi.Widget.Text_Input.Set_Text (Command_Field, "");
       Set_Focus (W, +Command_Field);
    end Submit;
+
+   procedure Export_Clicked (Button : Widget_Handle) is
+      pragma Unreferenced (Button);
+   begin
+      Execute_Line ("export out.mp4");
+   end Export_Clicked;
 
    procedure Submit_Clicked (Button : Widget_Handle) is
       pragma Unreferenced (Button);
@@ -362,7 +378,7 @@ begin
    Adi.Layout_Util.Set_Px_Maps_To_Dip (True);
    A.Set_Target_FPS (60);
    W := Create_Window_Handle
-     ("Framewise | Week 2", Adi.Window.Extent (Px (1100.0), Px (760.0)));
+     ("Framewise", Adi.Window.Extent (Px (1100.0), Px (760.0)));
 
    declare
       Root  : constant Adi.Widget.Box.Box_Handle := Adi.Widget.Box.Create_Handle;
@@ -371,10 +387,13 @@ begin
         Adi.Widget.Label.Create_Handle ("Framewise - command-driven video editor");
       Hint  : constant Adi.Widget.Label.Label_Handle :=
         Adi.Widget.Label.Create_Handle
-          ("Type commands below (e.g. load ../examples/cut.fw, list, info c1).");
+          ("Drag the timeline ruler to preview. Load a project with load ../examples/cut.fw.");
       Send : constant Adi.Widget.Button.Button_Handle :=
         Adi.Widget.Button.Create_Handle ("Run command");
       View_Row : constant Adi.Widget.Box.Box_Handle := Adi.Widget.Box.Create_Handle;
+      Preview_Row : constant Adi.Widget.Box.Box_Handle := Adi.Widget.Box.Create_Handle;
+      Export_Button : constant Adi.Widget.Button.Button_Handle :=
+        Adi.Widget.Button.Create_Handle ("Export out.mp4");
       Track_Scroll : constant Adi.Widget.Box.Box_Handle := Adi.Widget.Box.Create_Handle;
       Import_Row : constant Adi.Widget.Box.Box_Handle := Adi.Widget.Box.Create_Handle;
       Import_Name_Label : constant Adi.Widget.Label.Label_Handle :=
@@ -394,8 +413,10 @@ begin
       begin
          V.Read_Sequence := Read_Sequence'Unrestricted_Access;
          V.Submit_Command := Execute_Line'Unrestricted_Access;
+         V.Preview_Changed := Show_Preview'Unrestricted_Access;
          V.Selection_Changed := Clip_Selected'Unrestricted_Access;
       end;
+      Preview := Adi.Widget.Label.Create_Handle ("");
       Sources := Adi.Widget.Text_Editor.Create_Handle ("Sources");
       Adi.Widget.Text_Editor.Set_Read_Only (Sources);
       Razor_Button := Adi.Widget.Button.Create_Handle ("Razor Mode");
@@ -442,6 +463,12 @@ begin
       Set_Part_Style (+Title, Label_Part, Style.Base (Text_Style).Build);
       Set_Part_Style (+Hint, Label_Part, Style.Base (Text_Style).Build);
       Set_Part_Style (+Status, Label_Part, Style.Base (Text_Style).Build);
+      Set_Part_Style (+Preview_Row, Main_Part, Style.Base (Input_Row_Style).Build);
+      Set_Part_Style (+Preview, Main_Part, Style.Base
+        ((Flex_Grow => Set (1.0), Padding => Set (CSS_Box (Px (8.0))),
+          Background_Color => Set_Bg (RGB (32, 37, 48)), others => <>)).Build);
+      Set_Part_Style (+Preview, Label_Part, Style.Base (Text_Style).Build);
+      Style_Button (Export_Button);
       Style_Button (Send);
       Style_Button (Import_Button);
       Style_Button (Zoom_In);
@@ -498,6 +525,7 @@ begin
       Adi.Widget.Button.Connect_Clicked (Scroll_Left, Change_View'Unrestricted_Access);
       Adi.Widget.Button.Connect_Clicked (Scroll_Right, Change_View'Unrestricted_Access);
       Adi.Widget.Button.Connect_Clicked (Razor_Button, Toggle_Razor'Unrestricted_Access);
+      Adi.Widget.Button.Connect_Clicked (Export_Button, Export_Clicked'Unrestricted_Access);
       Connect_Key_Down (W, Key_Down'Unrestricted_Access);
 
       Add_Child (+Root, +Title);
@@ -521,6 +549,9 @@ begin
       Add_Child (+Import_Row, +Import_Kind);
       Add_Child (+Root, +Track_Scroll);
       Add_Child (+Track_Scroll, +Tracks);
+      Add_Child (+Root, +Preview_Row);
+      Add_Child (+Preview_Row, +Preview);
+      Add_Child (+Preview_Row, +Export_Button);
       Add_Child (+Root, +Sources);
       Add_Child (+Root, +Output_Log);
       Add_Child (+Root, +Status);

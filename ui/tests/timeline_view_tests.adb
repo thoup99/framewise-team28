@@ -19,10 +19,18 @@ procedure Timeline_View_Tests is
       pragma Assert (R.Ok = Success, FS.Image (R));
    end Run;
 
+   Last_Preview : Unbounded_String;
+   Expect_Mouse_Success : Boolean := True;
+
+   procedure Record_Preview (Text : String) is
+   begin
+      Last_Preview := To_Unbounded_String (Text);
+   end Record_Preview;
+
    --  Route simulated mouse edits through the session.
    procedure Submit_Mouse_Command (Line : String) is
    begin
-      Run (Line);
+      Run (Line, Expect_Mouse_Success);
    end Submit_Mouse_Command;
 
    function Clip_Box (Name : String) return Rectangle is
@@ -51,6 +59,7 @@ begin
       V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (H);
    begin
       V.Read_Sequence := Read_Sequence'Unrestricted_Access;
+      V.Preview_Changed := Record_Preview'Unrestricted_Access;
       V.Submit_Command := Submit_Mouse_Command'Unrestricted_Access;
    end;
    Run ("load ../examples/cut.fw");
@@ -59,6 +68,27 @@ begin
    pragma Assert (Clip_Box ("c2") = (382.0, 34.0, 160.0, 36.0));
    pragma Assert (Clip_Box ("c3") = (558.0, 34.0, 256.0, 36.0));
    pragma Assert (Clip_Box ("m1") = (110.0, 82.0, 704.0, 36.0));
+   --  Scrub the ruler across a video end, a gap with music, and the
+   --  next clip's first tick. Release over the clip row, even in razor mode.
+   declare
+      V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (H);
+      History : constant Natural := FS.History_Length (S);
+   begin
+      V.Razor_Mode := True;
+      Timeline_View.On_Mouse_Down (V.Ptr.all, 110.0, 10.0, Left_Button);
+      pragma Assert (To_String (Last_Preview) = "c1 | 0 s");
+      Timeline_View.On_Mouse_Move (V.Ptr.all, 318.0, 10.0);
+      pragma Assert (To_String (Last_Preview) = "No video clip | 6.5 s");
+      Timeline_View.On_Mouse_Up (V.Ptr.all, 382.0, 50.0, Left_Button);
+      pragma Assert (To_String (Last_Preview) = "c2 | 8.5 s");
+      Timeline_View.On_Mouse_Move (V.Ptr.all, 400.0, 50.0);
+      pragma Assert (not V.Scrubbing and then not V.Drag_Active);
+      Timeline_View.Build_Items (V.Ptr.all);
+      pragma Assert (Get_Item (+H, Item_Count (+H)).Geometry = (382.0, 0.0, 2.0, 450.0));
+      pragma Assert (FS.History_Length (S) = History);
+      V.Razor_Mode := False;
+   end;
+
    --  Clicking without dragging should leave the clip unchanged.
    declare
       V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (H);
@@ -83,6 +113,21 @@ begin
    Rebuild;
 
    --  c3 should move from 14 seconds to 13.5 seconds.
+   pragma Assert (Clip_Box ("c3").X = 542.0);
+
+   --  Moving c3 onto c2 must report the error and preserve the accepted move.
+   declare
+      V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (H);
+      History : constant Natural := FS.History_Length (S);
+   begin
+      Expect_Mouse_Success := False;
+      Timeline_View.On_Mouse_Down (V.Ptr.all, 600.0, 50.0, Left_Button);
+      Timeline_View.On_Mouse_Up (V.Ptr.all, 488.0, 50.0, Left_Button);
+      Expect_Mouse_Success := True;
+      pragma Assert (FS.Image (R) = "err cannot move: unknown clip or overlap");
+      pragma Assert (FS.History_Length (S) = History);
+   end;
+   Rebuild;
    pragma Assert (Clip_Box ("c3").X = 542.0);
 
    --  Undo should restore the original clip position.
@@ -185,6 +230,10 @@ begin
    begin
       V.Zoom := 64.0;
       V.First_Second := 5.0;
+      Timeline_View.On_Mouse_Down (V.Ptr.all, 334.0, 10.0, Left_Button);
+      pragma Assert (To_String (Last_Preview) = "c2 | 8.5 s");
+      Timeline_View.On_Mouse_Up (V.Ptr.all, 10.0, 10.0, Left_Button);
+      pragma Assert (To_String (Last_Preview) = "c1 | 5 s");
       Timeline_View.Build_Items (V.Ptr.all);
       pragma Assert (FS.History_Length (S) = History);
    end;
@@ -206,5 +255,5 @@ begin
    begin
       Destroy (Base);
    end;
-   Ada.Text_IO.Put_Line ("PASS: timeline geometry, clipping, zoom, session refresh and failed edits");
+   Ada.Text_IO.Put_Line ("PASS: timeline geometry, playhead, zoom, session refresh and failed edits");
 end Timeline_View_Tests;

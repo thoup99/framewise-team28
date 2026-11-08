@@ -35,6 +35,7 @@ package Framewise.Session is
    --  Read-back for front ends
    ---------------------------------------------------------------------
 
+   subtype Media_Kind is Timeline.Media_Kind;
    subtype Sequence_View is Timeline.Sequence;
 
    function Sequence_Of (S : Session) return Sequence_View;
