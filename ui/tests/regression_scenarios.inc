@@ -329,8 +329,8 @@
                    "Console button belongs at far right of top bar");
             Click_Control (+Console_Button);
             Render (W);
-            Check (Dialogs.Is_Shown (Console_Dialog), "Console button opens floating dialog");
-            Check (Overlay_Count (W) = 1, "Console appears above editor");
+            Check (Is_Visible (+Console_Panel), "Console button opens floating panel");
+            Check (Overlay_Count (W) = 0, "Console must leave editor interactive");
             Check (Get_Focus_Handle (W) = Widget_Handle'(+Console_Input), "Console opens ready to type");
             for I in 1 .. Item_Count (+Console_Input) loop
                declare
@@ -353,7 +353,7 @@
             Check (Reply.Ok and then Dirty, "Console edits the shared project");
             Check (Combos.Get_Selected_Text (Track_Choice) = "consoleTrack", "Console refreshes track dropdown");
             Check (Ada.Strings.Fixed.Index
-              (Adi.Widget.Text_Editor.Get_Text (Console_Output), "> track consoleTrack video") > 0,
+              (Adi.Widget.Text_Editor.Get_Text (Console_Output), "[Console] track consoleTrack video") > 0,
               "Transcript includes entered command");
             Before := History;
             Command ("list");
@@ -387,8 +387,8 @@
             Check (Reply.Ok and then Dirty, "Console undo refreshes dirty state");
             Render (W);
             Before := US.To_Unbounded_String (Adi.Widget.Text_Editor.Get_Text (Console_Output));
-            Click_Control (+Dialogs.Get_Button_Handle (Console_Dialog, 2));
-            Check (not Dialogs.Is_Shown (Console_Dialog), "Close dismisses console");
+            Click_Control (+Console_Close_Button);
+            Check (not Is_Visible (+Console_Panel), "Close dismisses console");
             Check (Get_Focus_Handle (W) = Widget_Handle'(+Tracks), "Close returns focus to editor");
             Render (W);
             Click_Control (+Console_Button);
@@ -396,10 +396,10 @@
             Check (US.To_Unbounded_String (Adi.Widget.Text_Editor.Get_Text (Console_Output)) = Before,
                    "Console transcript persists when reopened");
             Adi.Window.On_Text_Input (W, "list");
-            Click_Control (+Dialogs.Get_Button_Handle (Console_Dialog, 1));
+            Click_Control (+Console_Run_Button);
             Check (Reply.Ok and then Inputs.Get_Text (Console_Input) = "", "Run button submits input");
             Stage ("incomplete plan after opening cut.fw must not crash the console");
-            Click_Control (+Dialogs.Get_Button_Handle (Console_Dialog, 2));
+            Click_Control (+Console_Close_Button);
             Open_Selected (Files ("examples/cut.fw"));
             Check (Reply.Ok, "Open cut.fw through the project picker callback");
             Before := History;
@@ -415,6 +415,99 @@
             Command ("plan " & Test_Dir & "/planned.mp4");
             Check (Reply.Ok and then History = Before and then not Dirty,
                    "Console accepts a valid plan immediately after an incomplete command");
+            Stage ("editor command logging without interrupting console typing");
+            Inputs.Set_Text (Console_Input, "info c");
+            Set_Focus (W, +Console_Input);
+            Adi.Window.On_Key_Down (W, Adi.SDL.Events.SDL_SCANCODE_LEFT, 0, 0, False);
+            Execute_Line ("track Background video");
+            Check (Reply.Ok and then Inputs.Get_Text (Console_Input) = "info c",
+                   "Incoming editor output preserves unfinished input");
+            Check (Get_Focus_Handle (W) = Widget_Handle'(+Console_Input), "Logging must not change focus");
+            Adi.Window.On_Text_Input (W, "1");
+            Check (Inputs.Get_Text (Console_Input) = "info 1c", "Logging preserves caret insertion position");
+            Check (Ada.Strings.Fixed.Count
+              (Adi.Widget.Text_Editor.Get_Text (Console_Output), "[Editor] track Background video") = 1,
+              "Editor command logged once under editor origin");
+            Inputs.Set_Text (Console_Input, "");
+
+            --  Real routed editor clicks must work with the console still open.
+            Render (W);
+            Click_Control (+Add_Track_Button);
+            Check (Dialogs.Is_Shown (Form), "Console must not block editor buttons");
+            Inputs.Set_Text (Values (1), "Observed");
+            Apply;
+            Check (Reply.Ok and then Is_Visible (+Console_Panel), "Editor action leaves console open");
+            Check (Ada.Strings.Fixed.Count
+              (Adi.Widget.Text_Editor.Get_Text (Console_Output), "[Editor] track Observed video") = 1,
+              "Track dialog command appears once");
+            Before := US.To_Unbounded_String (Adi.Widget.Text_Editor.Get_Text (Console_Output));
+            Render (W);
+            Click_Control (+Zoom_In);
+            Click_Control (+Scroll_Right);
+            Click_Control (+Start_Button);
+            Click_Control (+Filter_Buttons (Video_Media));
+            Check (US.To_Unbounded_String (Adi.Widget.Text_Editor.Get_Text (Console_Output)) = Before,
+                   "Navigation and filters must not clutter command log");
+
+            Stage ("timeline drag emits one editor command on release");
+            Render (W);
+            declare
+               G : constant Rectangle := Geometry_In_Window (+Tracks);
+               V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+               Step : constant Pixel_Type := Pixel_Type (V.Zoom);
+               X : constant Pixel_Type := G.X + 110.0 + 2.0 * Step;
+               Y : constant Pixel_Type := G.Y + 50.0;
+            begin
+               Adi.Window.On_Mouse_Down (W, X, Y, Left_Button);
+               Adi.Window.On_Mouse_Move (W, X + Step / 2.0, Y);
+               Adi.Window.On_Mouse_Move (W, X + Step, Y);
+               Check (US.To_Unbounded_String (Adi.Widget.Text_Editor.Get_Text (Console_Output)) = Before,
+                      "Intermediate drag motion must not log commands");
+               Adi.Window.On_Mouse_Up (W, X + Step, Y, Left_Button);
+            end;
+            Check (Reply.Ok and then FS.Sequence_Of (Editor).Tracks (1).Clips (1).Start = Framewise.Timebase,
+                   "Timeline remains interactive while console is open");
+            Check (Ada.Strings.Fixed.Count
+              (Adi.Widget.Text_Editor.Get_Text (Console_Output), "[Editor] move c1 1") = 1,
+              "A completed drag logs only its final command");
+            Render (W);
+            Click_Control (+Undo_Button);
+            Check (Reply.Ok and then FS.Sequence_Of (Editor).Tracks (1).Clips (1).Start = 0,
+                   "Routed undo works with console open");
+            Check (Ada.Strings.Fixed.Count
+              (Adi.Widget.Text_Editor.Get_Text (Console_Output), "[Editor] undo") = 1,
+              "Undo appears as an editor action");
+            Execute_Line ("move c1 5");
+            Check (not Reply.Ok and then Ada.Strings.Fixed.Index
+              (Adi.Widget.Text_Editor.Get_Text (Console_Output), "[Editor] move c1 5" &
+               Ada.Characters.Latin_1.LF & FS.Image (Reply)) > 0,
+              "Rejected editor edits include their error response");
+            Save_Selected (Files (Test_Dir & "/observed.fw"));
+            Check (Reply.Ok and then Ada.Strings.Fixed.Count
+              (Adi.Widget.Text_Editor.Get_Text (Console_Output), "[Editor] save " & Test_Dir & "/observed.fw") = 1,
+              "Editor saves are logged once");
+            Inputs.Set_Text (Console_Input, "draft");
+            Before := US.To_Unbounded_String (Adi.Widget.Text_Editor.Get_Text (Console_Output));
+            Render (W);
+            Click_Control (+Console_Close_Button);
+            Execute_Line ("track HiddenEdit audio");
+            Check (Reply.Ok, "Editor continues working after console closes");
+            Render (W);
+            Click_Control (+Console_Button);
+            Render (W);
+            Check (US.To_Unbounded_String (Adi.Widget.Text_Editor.Get_Text (Console_Output)) = Before,
+                   "Closed console must not collect editor commands");
+            Check (Inputs.Get_Text (Console_Input) = "draft", "Reopening preserves draft input");
+            Inputs.Set_Text (Console_Input, "");
+            Before := US.To_Unbounded_String (Adi.Widget.Text_Editor.Get_Text (Console_Output));
+            Command ("list");
+            Check (Ada.Strings.Fixed.Count
+              (Adi.Widget.Text_Editor.Get_Text (Console_Output), "[Console] list") =
+              Ada.Strings.Fixed.Count (US.To_String (Before), "[Console] list") + 1,
+              "Console command logged once under console origin");
+            Check (Ada.Strings.Fixed.Index
+              (Adi.Widget.Text_Editor.Get_Text (Console_Output), "[Editor] list") = 0,
+              "Console commands must not be duplicated as editor actions");
             Adi.Window.Handle_Resize (W, (960.0, 650.0));
             Render (W);
             declare
@@ -426,7 +519,7 @@
                  "Console input remains accessible in a smaller window");
             end;
             Adi.Window.On_Key_Down (W, Adi.SDL.Events.SDL_SCANCODE_ESCAPE, 0, 0, False);
-            Check (not Dialogs.Is_Shown (Console_Dialog), "Escape dismisses console");
+            Check (not Is_Visible (+Console_Panel), "Escape dismisses console");
          end;
          Ada.Text_IO.Put_Line ("PASS: editor workflow regression scenarios");
       end;

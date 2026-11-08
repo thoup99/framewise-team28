@@ -71,8 +71,7 @@ package body Editor_Cursors is
               +Source_Choice, +Track_Choice, +Kind_Choice,
               +Dialogs.Get_Button_Handle (Form, 1), +Dialogs.Get_Button_Handle (Form, 2),
               +Dialogs.Get_Button_Handle (Confirm, 1), +Dialogs.Get_Button_Handle (Confirm, 2),
-              +Dialogs.Get_Button_Handle (Console_Dialog, 1),
-              +Dialogs.Get_Button_Handle (Console_Dialog, 2)];
+              +Console_Run_Button, +Console_Close_Button];
          begin
             for H of Controls loop
                if Has_State (H, State_Hovered) then

@@ -149,8 +149,9 @@ package body Editor_Controller is
       Mark_Dirty (+Tracks);
    end Refresh_Timeline;
 
-   --  This is the common edit boundary for buttons, dialogs, and timeline gestures.
-   procedure Execute_Line (Line : String) is
+   --  Buttons, dialogs and released timeline gestures share this boundary.
+   --  Origin is explicit so console commands appear once under their own label.
+   procedure Apply_Command (Line : String; Origin : Editor_Console.Command_Origin) is
    begin
       FS.Execute (Editor, Line, Reply);
       Refresh_Timeline;
@@ -159,6 +160,12 @@ package body Editor_Controller is
       else
          Tell (FS.Image (Reply));
       end if;
+      Editor_Console.Record_Command (Line, FS.Image (Reply), Origin);
+   end Apply_Command;
+
+   procedure Execute_Line (Line : String) is
+   begin
+      Apply_Command (Line, Editor_Console.Editor_Action);
    end Execute_Line;
 
    function Safe_Path (Text : String) return Boolean is
@@ -277,7 +284,7 @@ package body Editor_Controller is
       Separator : Natural := Line'Last + 1;
       Path_First : Natural;
    begin
-      Execute_Line (Line);
+      Apply_Command (Line, Editor_Console.Console_Command);
       if not Reply.Ok then
          return;
       end if;
@@ -326,6 +333,8 @@ package body Editor_Controller is
             Reset_View;
             Refresh_Timeline;
             Tell ("New project. Import files and add a track to begin.");
+            Editor_Console.Record_Command
+              ("New Project", "ok new project", Editor_Console.Editor_Action);
          when Open_Project =>
             Adi.OS.Show_Open_File_Dialog (Open_Selected'Access, W,
               Filters => [(US.To_Unbounded_String ("Framewise projects"), US.To_Unbounded_String ("fw"))]);
@@ -536,11 +545,14 @@ package body Editor_Controller is
       use type Adi.SDL.Events.SDL_Keymod;
       Ctrl : constant Boolean := (Key_Mod and Adi.SDL.Events.SDL_KMOD_CTRL) /= 0;
    begin
-      if Dialogs.Is_Shown (Console_Dialog) then
+      if Overlay_Count (W) > 0 then
+         return;
+      end if;
+      if Editor_Console.Is_Open and then Editor_Console.Has_Focus then
          Editor_Console.Handle_Key (Scancode, Repeat, Handled);
          return;
       end if;
-      if Repeat or else Dialogs.Is_Shown (Form) or else Dialogs.Is_Shown (Confirm) then
+      if Repeat then
          return;
       end if;
       if Ctrl and then Scancode = Key_S then

@@ -27,6 +27,7 @@ with Editor_Context; use Editor_Context;
 with Adi.OS;
 with Adi.SDL.Video;
 with Interfaces.C.Strings;
+with Ada.Characters.Latin_1;
 with Ada.Strings.Fixed;
 with Ada.Directories;
 with Ada.Text_IO;

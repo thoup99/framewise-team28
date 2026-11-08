@@ -1,7 +1,16 @@
 with Adi.SDL.Events;
 
 package Editor_Console is
+   type Command_Origin is (Editor_Action, Console_Command);
+
    procedure Build;
+
+   function Is_Open return Boolean;
+
+   function Has_Focus return Boolean;
+
+   --  Append only while open, preserving the command field and its focus.
+   procedure Record_Command (Line, Response : String; Origin : Command_Origin);
 
    procedure Show;
 
