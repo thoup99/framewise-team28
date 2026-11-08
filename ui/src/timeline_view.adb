@@ -103,9 +103,21 @@ package body Timeline_View is
             end loop;
          end;
       end if;
-      if Control then
-         --  Exact half-second intervals; ties round toward the later interval.
-         return Long_Float'Floor (Raw * 2.0 + 0.5) / 2.0;
+      if Control and then W.Snap_Interval > 0 and then
+        W.Snap_Interval <= Framewise.Time'Last / 2 and then
+        Raw <= Framewise.Seconds (Framewise.Time'Last / 2)
+      then
+         --  Round in ticks so decimal intervals and halfway values stay exact.
+         declare
+            Ticks : constant Framewise.Time := Framewise.Time (Raw * Long_Float (Framewise.Timebase));
+            Remainder : constant Framewise.Time := Ticks mod W.Snap_Interval;
+            Rounded : Framewise.Time := Ticks - Remainder;
+         begin
+            if Remainder >= W.Snap_Interval - Remainder then
+               Rounded := Rounded + W.Snap_Interval;
+            end if;
+            return Framewise.Seconds (Rounded);
+         end;
       end if;
       return Raw;
    end Drag_Position;
@@ -221,9 +233,12 @@ package body Timeline_View is
       Left : constant Pixel_Type := G.X + Gutter;
       Right : constant Pixel_Type := G.X + G.Width;
       Y : Pixel_Type := G.Y + Ruler_Height;
+      Ghost_Visible : Boolean := False;
+      Ghost_Area : Rectangle;
+      Ghost_Name : Unbounded_String;
 
-      procedure Label (Area : Rectangle; Text : String) is
-         I : Item := Make_Text (Label_Part, Area, Text, 2);
+      procedure Label (Area : Rectangle; Text : String; Z_Order : Natural := 2) is
+         I : Item := Make_Text (Label_Part, Area, Text, Z_Order);
       begin
          I.Wrap_Text := False;
          Add_Item (W, I);
@@ -370,23 +385,9 @@ package body Timeline_View is
                                        (Long_Float (Right - Left), Preview_X2));
                            begin
                               if Ghost_Right > Ghost_Left then
-                                 Add_Item
-                                    (W,
-                                    Make_Panel
-                                       (Selected_Part,
-                                       (Ghost_Left,
-                                       Y + 4.0,
-                                       Ghost_Right - Ghost_Left,
-                                       36.0),
-                                       3));
-
-                                 Label
-                                    ((Ghost_Left + 3.0,
-                                    Y + 10.0,
-                                    Pixel_Type'Max
-                                       (0.0, Ghost_Right - Ghost_Left - 6.0),
-                                       24.0),
-                                       Framewise.Image (C.N));
+                                 Ghost_Visible := True;
+                                 Ghost_Area := (Ghost_Left, Y + 4.0, Ghost_Right - Ghost_Left, 36.0);
+                                 Ghost_Name := To_Unbounded_String (Framewise.Image (C.N));
                               end if;
                            end;
                   end if;      
@@ -397,10 +398,17 @@ package body Timeline_View is
                Y := Y + 48.0;
             end if;
          end loop;
+         --  Adi paints items in insertion order, so defer the dragged clip
+         --  until every other clip (including its text) has been added.
+         if Ghost_Visible then
+            Add_Item (W, Make_Panel (Selected_Part, Ghost_Area, 3));
+            Label ((Ghost_Area.X + 3.0, Ghost_Area.Y + 6.0,
+              Pixel_Type'Max (0.0, Ghost_Area.Width - 6.0), 24.0), To_String (Ghost_Name), 4);
+         end if;
          X := Left + Pixel_Type ((Framewise.Seconds (W.Playhead) - W.First_Second) * W.Zoom);
          if X >= Left and then X < Right then
             Add_Item (W, Make_Panel (Selected_Part,
-              (X, G.Y, Pixel_Type'Min (2.0, Right - X), G.Height), 4));
+              (X, G.Y, Pixel_Type'Min (2.0, Right - X), G.Height), 5));
          end if;
          if not Any_Track then
             Label ((Left, Y, Right - Left, 30.0), "No tracks. Use Add Track to begin.");

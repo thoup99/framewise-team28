@@ -67,6 +67,44 @@ package body Editor_Controller is
       Editor_Console.Record_Command (Action, "err " & Message, Editor_Console.Editor_Action);
    end Report_Editor_Error;
 
+   procedure Snap_Interval_Changed (Input : Widget_Handle; Text : String) is
+      pragma Unreferenced (Input);
+      Interval : Framewise.Time := 0;
+      Valid : Boolean;
+   begin
+      declare
+         Seconds : Long_Float;
+      begin
+         Seconds := Long_Float'Value (Text);
+         if Seconds in 1.0 / Long_Float (Framewise.Timebase) ..
+           Framewise.Seconds (Framewise.Time'Last / 2)
+         then
+            Interval := Framewise.Time (Seconds * Long_Float (Framewise.Timebase));
+         end if;
+      exception
+         when Constraint_Error => null;
+      end;
+      Valid := Interval in 1 .. Framewise.Time'Last / 2;
+      if Valid then
+         declare
+            V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+         begin
+            V.Snap_Interval := Interval;
+            Mark_Dirty (+Tracks);
+         end;
+         Tell ("Control-drag snap interval: " & FS.Image_Time (Interval) & " s.");
+      else
+         Tell ("Enter positive snap seconds (minimum 1/90000 s); the last valid interval is still active.");
+      end if;
+      declare
+         Text_Color : constant Color_Value :=
+           (if Valid then RGB (215, 225, 239) else RGB (255, 150, 150));
+      begin
+         Set_Part_Style (+Snap_Interval_Input, Text_Part, Style.Base
+           ((Text_Style with delta Color => Set (Text_Color))).Build);
+      end;
+   end Snap_Interval_Changed;
+
    function History return US.Unbounded_String is
       Result : US.Unbounded_String;
    begin
@@ -265,7 +303,8 @@ package body Editor_Controller is
       Timeline_View.Set_Razor_Pointer (V.Ptr.all, 0.0, 0.0, False);
       V.Drag_Active := False;
       V.Scrubbing := False;
-      Labels.Set_Text (Tool_Status, "Select: drag clips or their edges to edit");
+      Labels.Set_Text (Tool_Status, "");
+      Set_Visible (+Tool_Status, False);
    end Reset_View;
 
    procedure Open_Selected (Files : Adi.OS.String_Array) is
@@ -489,7 +528,8 @@ package body Editor_Controller is
                Mark_Dirty (+Tracks);
                Labels.Set_Text (Tool_Status,
                  (if V.Razor_Mode then "Razor: click inside a clip to split"
-                  else "Select: drag clips or their edges to edit"));
+                  else ""));
+               Set_Visible (+Tool_Status, V.Razor_Mode);
             elsif Button = Widget_Handle'(+Zoom_In) then
                V.Zoom := Long_Float'Min (256.0, V.Zoom * 2.0);
             elsif Button = Widget_Handle'(+Zoom_Out) then
@@ -561,6 +601,9 @@ package body Editor_Controller is
          return;
       end if;
       if Overlay_Count (W) > 0 then
+         return;
+      end if;
+      if Get_Focus_Handle (W) = Widget_Handle'(+Snap_Interval_Input) then
          return;
       end if;
       if Repeat then

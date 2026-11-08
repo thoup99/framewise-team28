@@ -17,6 +17,7 @@ with Editor_Console;
 package body Editor_Layout is
    use type Buttons.Button_Handle;
    use type Labels.Label_Handle;
+   use type Inputs.Text_Input_Handle;
    use type Combos.Combo_Box_Handle;
    use type Adi.Widget.Text_Editor.Text_Editor_Handle;
    use type Timeline_View.Views.Handle;
@@ -165,6 +166,28 @@ package body Editor_Layout is
       Zoom_In := Make_Button (+Timeline_Tools, "Zoom +");
       Scroll_Left := Make_Button (+Timeline_Tools, "Earlier");
       Scroll_Right := Make_Button (+Timeline_Tools, "Later");
+      Add_Label (+Timeline_Tools, "Snap (s)");
+      Snap_Interval_Input := Inputs.Create_Handle ("0.5");
+      Inputs.Set_Min_Visible_Chars (Snap_Interval_Input, 6);
+      Inputs.Set_Context_Menu_Part_Styles (Snap_Interval_Input,
+        (Main_Part => (Style => Style.Base (Floating_Panel_Style).Build, Enabled => True), others => <>));
+      Inputs.Set_Context_Menu_Item_Part_Styles (Snap_Interval_Input,
+        (Main_Part => (Style => Style.Base
+           ((Padding => Set (CSS_Box (Px (6.0), Px (8.0))), others => <>))
+           .On_Hover ((Background_Color => Set_Bg (RGB (45, 78, 119)), others => <>))
+           .On_Selected ((Background_Color => Set_Bg (RGB (45, 78, 119)), others => <>)).Build,
+          Enabled => True),
+         Label_Part => (Style => Style.Base (Text_Style).Build, Enabled => True), others => <>));
+      Set_Part_Style (+Snap_Interval_Input, Main_Part, Style.Base
+        ((Width => Set (Size (Px (86.0))), Flex_Shrink => Set (0.0),
+          Background_Color => Set_Bg (RGB (38, 50, 67)),
+          Padding => Set (CSS_Box (Px (6.0))), others => <>)).Build);
+      Set_Part_Style (+Snap_Interval_Input, Text_Part, Style.Base (Text_Style).Build);
+      Set_Part_Style (+Snap_Interval_Input, Cursor_Part, Style.Base
+        ((Background_Color => Set_Bg (RGB (240, 245, 255)), others => <>)).Build);
+      Set_Part_Style (+Snap_Interval_Input, Selected_Part, Style.Base
+        ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
+      Add_Child (+Timeline_Tools, +Snap_Interval_Input);
 
       Add_Label (+Placement_Row, "Select media");
       Source_Choice := Combos.Create_Handle;
@@ -176,7 +199,8 @@ package body Editor_Layout is
       Style_Combo (Track_Choice);
       Add_Child (+Placement_Row, +Track_Choice);
       Place_Button := Make_Button (+Placement_Row, "Add Selected Media to Track");
-      Tool_Status := Make_Label (+Placement_Row, "Select: drag clips or their edges to edit");
+      Tool_Status := Make_Label (+Placement_Row, "");
+      Set_Visible (+Tool_Status, False);
 
       Tracks := Timeline_View.Views.New_Widget;
       Set_Flag (+Tracks, Clickable, True);
@@ -189,6 +213,8 @@ package body Editor_Layout is
          V.Preview_Changed := Show_Preview'Access;
          V.Selection_Changed := Clip_Selected'Access;
       end;
+
+      Inputs.Connect_Changed (Snap_Interval_Input, Snap_Interval_Changed'Access);
 
       Set_Part_Style (+Track_Scroll, Main_Part, Style.Base
         ((Flex_Grow => Set (1.0), Min_Height => Set (Size (Px (80.0))),

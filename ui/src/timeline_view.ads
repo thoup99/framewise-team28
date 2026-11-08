@@ -17,6 +17,7 @@ package Timeline_View is
    type Track_Widget is new Adi.Widget.Widget with record
       Read_Sequence  : Sequence_Reader;
       Submit_Command : Command_Callback := null;
+      Snap_Interval  : Framewise.Time := Framewise.Time (Framewise.Timebase / 2);
       Zoom           : Long_Float := 32.0;
       First_Second   : Long_Float := 0.0;
       Playhead       : Framewise.Time := 0;

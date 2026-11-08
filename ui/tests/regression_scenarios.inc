@@ -60,6 +60,77 @@
          Assert_Centered;
          Check (Get_Scroll_Max_Offset_Y (+Track_Scroll) = 0.0, "Empty timeline must not overflow");
 
+         Stage ("snap interval field placement, typing and validation");
+         declare
+            V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+            Before : constant String := Adi.Widget.Text_Editor.Get_Text (Console_Output);
+            Saved : constant US.Unbounded_String := History;
+            procedure Enter_Interval (Text : String) is
+            begin
+               Set_Focus (W, +Snap_Interval_Input);
+               Adi.Window.On_Key_Down
+                 (W, Adi.SDL.Events.SDL_SCANCODE_A, 0, Adi.SDL.Events.SDL_KMOD_CTRL, False);
+               Adi.Window.On_Key_Down (W, Adi.SDL.Events.SDL_SCANCODE_BACKSPACE, 0, 0, False);
+               if Text'Length > 0 then
+                  Adi.Window.On_Text_Input (W, Text);
+               end if;
+            end Enter_Interval;
+         begin
+            Check (Get_Child_Handle (+Timeline_Tools, 9) = Widget_Handle'(+Scroll_Right),
+                   "Later remains the last navigation button");
+            Check (Get_Child_Handle (+Timeline_Tools, 11) = Widget_Handle'(+Snap_Interval_Input),
+                   "Snap input follows Later and its label");
+            Check (Inputs.Get_Text (Snap_Interval_Input) = "0.5" and then
+              V.Snap_Interval = Framewise.Timebase / 2, "Default snap interval is half a second");
+            Check (not Is_Visible (+Tool_Status) and then Labels.Get_Text (Tool_Status) = "",
+                   "Select instruction text is removed");
+            Enter_Interval ("0.25");
+            Check (V.Snap_Interval = Framewise.Timebase / 4, "Typed quarter-second interval reaches timeline");
+            Render (W);
+            declare
+               Caret : Boolean := False;
+            begin
+               for I in 1 .. Item_Count (+Snap_Interval_Input) loop
+                  declare
+                     Drawn : constant Item := Get_Item (+Snap_Interval_Input, I);
+                  begin
+                     Caret := Caret or else (Drawn.Part = Cursor_Part and then
+                       Drawn.Geometry.Width > 0.0 and then Drawn.Geometry.Height > 0.0);
+                  end;
+               end loop;
+               Check (Caret, "Snap interval input has a visible typing caret");
+            end;
+            Enter_Interval ("0");
+            Check (V.Snap_Interval = Framewise.Timebase / 4, "Zero retains last valid interval");
+            Enter_Interval ("-1");
+            Check (V.Snap_Interval = Framewise.Timebase / 4, "Negative interval rejected");
+            Enter_Interval ("abc");
+            Check (V.Snap_Interval = Framewise.Timebase / 4, "Nonnumeric interval rejected");
+            Enter_Interval ("1e100");
+            Check (V.Snap_Interval = Framewise.Timebase / 4, "Oversized interval rejected");
+            Enter_Interval ("0.000001");
+            Check (V.Snap_Interval = Framewise.Timebase / 4, "Sub-tick interval rejected");
+            Enter_Interval ("");
+            Check (V.Snap_Interval = Framewise.Timebase / 4, "Empty input retains last valid interval");
+            Render (W);
+            Check (Get_Resolved_Part_Style (+Snap_Interval_Input, Text_Part).Color = RGB (255, 150, 150),
+                   "Invalid input is visibly marked");
+            Enter_Interval ("1");
+            Check (V.Snap_Interval = Framewise.Timebase, "Whole-second interval accepted");
+            Enter_Interval ("0.1");
+            Check (V.Snap_Interval = Framewise.Timebase / 10, "Decimal interval stored as exact ticks");
+            Adi.Window.On_Key_Down
+              (W, Adi.SDL.Events.SDL_SCANCODE_Z, 0, Adi.SDL.Events.SDL_KMOD_CTRL, False);
+            Check (History = Saved and then not Dirty and then
+              Adi.Widget.Text_Editor.Get_Text (Console_Output) = Before,
+              "Editing snap settings and undoing text must not execute project commands");
+            Enter_Interval ("0.5");
+            Render (W);
+            Check (Get_Resolved_Part_Style (+Snap_Interval_Input, Text_Part).Color = RGB (215, 225, 239),
+                   "Valid input restores normal text color");
+            Set_Focus (W, +Tracks);
+         end;
+
          Stage ("button validation failures reach the closed console");
          Initial_History := History;
          Clicked (+Delete_Button);
@@ -202,6 +273,8 @@
          Check (Has_State (+Razor_Button, State_Selected), "Razor active highlight");
          Clicked (+Razor_Button);
          Check (not Has_State (+Razor_Button, State_Selected), "Razor inactive highlight");
+         Check (not Is_Visible (+Tool_Status) and then Labels.Get_Text (Tool_Status) = "",
+                "Leaving Razor mode does not restore the removed Select instruction");
          Clicked (+End_Button);
          declare
             T : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);

@@ -338,12 +338,14 @@ begin
 
       procedure Drop_At
         (Raw, Expected : Long_Float; Modifiers : SDL_Keymod;
-         Zoom : Long_Float := 32.0; Success : Boolean := True)
+         Zoom : Long_Float := 32.0; Success : Boolean := True;
+         Interval : Framewise.Time := Framewise.Timebase / 2)
       is
          History : constant Natural := FS.History_Length (S);
          Grab : Pixel_Type;
          Target : Pixel_Type;
       begin
+         V.Snap_Interval := Interval;
          V.Zoom := Zoom;
          V.First_Second := 0.0;
          V.Razor_Mode := False;
@@ -358,6 +360,26 @@ begin
          pragma Assert (abs (Clip_Box ("dragged").X - (110.0 + Pixel_Type (Expected * Zoom))) < 0.01,
                         "Drag preview must use snapped target");
          pragma Assert (FS.History_Length (S) = History, "Preview must not edit document");
+         declare
+            Ghost_Label, Other_Label : Natural := 0;
+         begin
+            for I in 1 .. Item_Count (+H) loop
+               declare
+                  Drawn : constant Item := Get_Item (+H, I);
+               begin
+                  if Drawn.Kind = Text_Item and then To_String (Drawn.Text_Content) = "dragged" then
+                     Ghost_Label := I;
+                  elsif Drawn.Kind = Text_Item and then To_String (Drawn.Text_Content) = "right" then
+                     Other_Label := I;
+                  end if;
+               end;
+            end loop;
+            pragma Assert (Other_Label > 0 and then Ghost_Label > Other_Label + 1,
+                           "Dragged panel and text must be painted after the other clips");
+            pragma Assert (Get_Item (+H, Ghost_Label - 1).Kind = Panel_Item and then
+              Get_Item (+H, Ghost_Label).Z_Order > Get_Item (+H, Ghost_Label - 1).Z_Order,
+              "Dragged label stays above its own panel");
+         end;
          Expect_Mouse_Success := Success;
          Timeline_View.On_Mouse_Up (V.Ptr.all, Target, 50.0, Left_Button);
          Expect_Mouse_Success := True;
@@ -384,6 +406,12 @@ begin
       Drop_At (6.24, 6.0, SDL_KMOD_CTRL);
       Drop_At (6.26, 6.5, SDL_KMOD_CTRL);
       Drop_At (6.25, 6.5, SDL_KMOD_CTRL);       --  Halfway rounds toward the later interval.
+      Drop_At (6.12, 6.0, SDL_KMOD_CTRL, Interval => Framewise.Timebase / 4);
+      Drop_At (6.14, 6.25, SDL_KMOD_CTRL, Interval => Framewise.Timebase / 4);
+      Drop_At (6.26, 6.0, SDL_KMOD_CTRL, Interval => Framewise.Timebase);
+      Drop_At (6.15, 6.2, SDL_KMOD_CTRL, Interval => Framewise.Timebase / 10);
+      Drop_At (6.24, 6.24, SDL_KMOD_CTRL, Interval => 0);
+
       Drop_At (3.45, 3.3, SDL_KMOD_SHIFT or SDL_KMOD_CTRL);
       Drop_At (6.24, 6.0, SDL_KMOD_SHIFT or SDL_KMOD_CTRL);
       Drop_At (9.8, 10.0, SDL_KMOD_CTRL, Success => False);

@@ -35,11 +35,14 @@ to reach tracks below the viewport. It hides when all tracks fit.
 
 Hold **Shift** while dragging a clip body to snap either edge to a neighboring
 clip on the same track when it is within 10 screen pixels. Hold **Control** to
-snap the clip's start to the nearest 0.5-second interval; halfway values round
-forward. With both held, a nearby valid clip edge takes priority, otherwise the
-half-second grid applies. Modifier changes update the preview even without
+snap the clip's start to the interval set in **Snap (s)** immediately after
+**Later**. The default is 0.5 seconds; positive decimal values such as 0.25 or 1
+are supported. Empty or invalid input is marked red and keeps the last valid
+interval active. Halfway values round forward. With both held, a nearby valid
+clip edge takes priority, otherwise the configured interval applies. Modifier changes update the preview even without
 moving the pointer. Release commits one move command; overlap validation still
-applies. Trim handles keep their existing behavior.
+applies. The dragged clip and its label are drawn above the other clips.
+Trim handles keep their existing behavior.
 
 ## Optional console
 
