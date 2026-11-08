@@ -149,23 +149,27 @@ package body Framewise.Commands with SPARK_Mode => Off is
       end Need;
 
       procedure Get_Name (Tok_I, Into : Positive) is
-         S : constant String := Tok (Tok_I);
       begin
+         --  Validate the token before Tok slices the original input line.
          if not G or else Tok_I > N then
             G := False;
             return;
          end if;
-         if S'Length > Max_Name then
-            G := False;
-            return;
-         end if;
-         for Ch of S loop
-            if not (Ch in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_') then
+         declare
+            S : constant String := Tok (Tok_I);
+         begin
+            if S'Length > Max_Name then
                G := False;
                return;
             end if;
-         end loop;
-         Names (Into) := To_Name (S);
+            for Ch of S loop
+               if not (Ch in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_') then
+                  G := False;
+                  return;
+               end if;
+            end loop;
+            Names (Into) := To_Name (S);
+         end;
       end Get_Name;
 
       procedure Get_Time (Tok_I, Into : Positive) is
@@ -217,13 +221,20 @@ package body Framewise.Commands with SPARK_Mode => Off is
       end Get_Int;
 
       procedure Get_Path (Tok_I : Positive) is
-         S : constant String := Tok (Tok_I);
       begin
-         if not G or else Tok_I > N or else S'Length > Max_Path then
+         if not G or else Tok_I > N then
             G := False;
             return;
          end if;
-         Pth := To_Path (S);
+         declare
+            S : constant String := Tok (Tok_I);
+         begin
+            if S'Length > Max_Path then
+               G := False;
+               return;
+            end if;
+            Pth := To_Path (S);
+         end;
       end Get_Path;
 
       procedure Fail (Msg : String) is

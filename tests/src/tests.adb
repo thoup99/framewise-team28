@@ -143,6 +143,7 @@ procedure Tests is
       Err  : Error_String;
       Last : Natural;
       procedure Round_Trip (L : String);
+      procedure Reject_Incomplete (L : String);
       procedure Round_Trip (L : String) is
       begin
          Parse (L, C, Ok, Err, Last);
@@ -150,6 +151,12 @@ procedure Tests is
          Parse (Image (C), D, Ok, Err, Last);
          Check ("round trip: " & Image (C), Ok and then Image (D) = Image (C));
       end Round_Trip;
+
+      procedure Reject_Incomplete (L : String) is
+      begin
+         Parse (L, C, Ok, Err, Last);
+         Check ("missing arguments: " & L, not Ok and then Last > 0 and then C.K = Empty);
+      end Reject_Incomplete;
    begin
       Round_Trip ("import a a.mp4 30 video");
       Round_Trip ("track v1 video");
@@ -160,6 +167,29 @@ procedure Tests is
       Round_Trip ("delete c2");
       Round_Trip ("settings 1280 720 30");
       Round_Trip ("proxy a");
+      Round_Trip ("plan out.mp4");
+      Round_Trip ("export out.mp4");
+      Round_Trip ("save project.fw");
+      Round_Trip ("load project.fw");
+
+      --  Missing name/path tokens must be rejected before slicing the input.
+      Reject_Incomplete ("plan");
+      Reject_Incomplete ("export");
+      Reject_Incomplete ("save");
+      Reject_Incomplete ("load");
+      Reject_Incomplete ("import");
+      Reject_Incomplete ("import source");
+      Reject_Incomplete ("track");
+      Reject_Incomplete ("place");
+      Reject_Incomplete ("place clip track");
+      Reject_Incomplete ("move");
+      Reject_Incomplete ("trim");
+      Reject_Incomplete ("split");
+      Reject_Incomplete ("split clip 5");
+      Reject_Incomplete ("delete");
+      Reject_Incomplete ("info");
+      Reject_Incomplete ("proxy");
+      Reject_Incomplete ("settings");
       Parse ("import a a.mp4", C, Ok, Err, Last);
       Check
          ("import without length",
@@ -190,6 +220,8 @@ procedure Tests is
       Check ("overlap not recorded", not R.Ok and History_Length (S) = 3);
       Execute (S, "info c1", R);
       Check ("info clip", R.Ok and Has (R, "length 10"));
+      Execute (S, "plan", R);
+      Check ("incomplete plan preserves project", not R.Ok and History_Length (S) = 3);
       Execute (S, "plan out.mp4", R);
       Check ("plan is an ffmpeg line",
              R.Ok and Has (R, "-i a.mp4") and Has (R, "[vout]"));

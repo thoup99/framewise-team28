@@ -398,6 +398,23 @@
             Adi.Window.On_Text_Input (W, "list");
             Click_Control (+Dialogs.Get_Button_Handle (Console_Dialog, 1));
             Check (Reply.Ok and then Inputs.Get_Text (Console_Input) = "", "Run button submits input");
+            Stage ("incomplete plan after opening cut.fw must not crash the console");
+            Click_Control (+Dialogs.Get_Button_Handle (Console_Dialog, 2));
+            Open_Selected (Files ("examples/cut.fw"));
+            Check (Reply.Ok, "Open cut.fw through the project picker callback");
+            Before := History;
+            Render (W);
+            Click_Control (+Console_Button);
+            Render (W);
+            Command ("plan");
+            Check (not Reply.Ok and then History = Before and then not Dirty,
+                   "Incomplete plan returns an error without changing the loaded project");
+            Check (Ada.Strings.Fixed.Index
+              (Adi.Widget.Text_Editor.Get_Text (Console_Output), "err bad arguments for plan") > 0,
+              "Console transcript explains rejected plan");
+            Command ("plan " & Test_Dir & "/planned.mp4");
+            Check (Reply.Ok and then History = Before and then not Dirty,
+                   "Console accepts a valid plan immediately after an incomplete command");
             Adi.Window.Handle_Resize (W, (960.0, 650.0));
             Render (W);
             declare
