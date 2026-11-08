@@ -119,3 +119,49 @@ Manual regression:
   compare the saved files. The documents must be identical.
 - Export with actual example media available in the working directory and
   verify the resulting video. Check both successful and failed export.
+
+## Automated regression baseline
+
+Build the CLI once, then run all UI checks with assertions enabled:
+
+```sh
+cd cli
+alr -n build
+cd ../ui
+alr -n build
+alr -n exec -- gprbuild -P ui_checks.gpr
+SDL_VIDEODRIVER=dummy SDL_RENDER_DRIVER=software ./bin/timeline_view_tests
+SDL_VIDEODRIVER=dummy SDL_RENDER_DRIVER=software ./bin/editor_split_tests
+python3 tests/run_regressions.py
+```
+
+These shell examples run from the repository root initially. On Windows,
+set the SDL environment variables using PowerShell syntax. FFmpeg, ffprobe,
+Python 3 and the usual UI build dependencies must be installed.
+
+`timeline_view_tests` covers move/trim/split/delete/undo gestures, clipping,
+zoom, playhead, rejected edits, cursor choices and the Razor split guide.
+`editor_split_tests` covers both divider axes, drag bounds and small windows.
+`run_regressions.py` adds the complete editor workflow: media filters, import
+results, named tracks and validation, caret/focus, placement and move dialogs,
+Razor selected state, navigation, settings, real export (including failure),
+save/save-as and cancellation, native window titles, unsaved-change prompts,
+routed divider dragging and routed scrollbar thumb/track interaction.
+It verifies the exported video with ffprobe and compares GUI and CLI saved
+`.fw` documents byte for byte. Test files live in a disposable temporary folder.
+
+The production UI is still monolithic. The runner builds a **test-only copy**
+of its entry point, substituting `regression_scenarios.inc` for `A.Run` after
+all normal widgets and callbacks have been constructed. It does not modify
+production sources or add test controls to the editor. This small adapter
+fails explicitly if the entry-point anchors change; when the UI is split into
+packages, replace the adapter with imports of those packages and retain the
+behavioral scenarios as the before/after baseline. No pixel screenshots are
+required; layout checks assert relationships such as equal widths and centered
+controls. File-picker result callbacks are tested; interaction with OS-native
+file-picker windows and appearance on Windows/HiDPI remain manual checks.
+
+CI imports the GUI job from main and runs the two widget suites plus this
+workflow suite using SDL's dummy video driver and software rendering. The
+library, CLI, export and proof jobs remain intact. On failure, CI uploads the
+workflow log and generated regression driver to help locate the failed check.

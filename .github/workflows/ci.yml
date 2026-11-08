@@ -74,3 +74,67 @@ jobs:
       - name: Prove timeline operations
         run: |
           alr -n exec -- gnatprove -P framewise.gpr -u framewise-timeline.adb --mode=all --level=2 --report=all --output=oneline --checks-as-errors=on
+
+  gui-tests:
+    name: GUI interaction tests
+    timeout-minutes: 30
+    runs-on: ubuntu-26.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Alire
+        uses: alire-project/setup-alire@v4
+
+      - name: Install GUI and FFmpeg dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ffmpeg \
+            libsdl3-dev \
+            libsdl3-ttf-dev \
+            libsdl3-image-dev \
+            libavformat-dev \
+            libavcodec-dev \
+            libavutil-dev \
+            libswscale-dev \
+            libswresample-dev
+
+      - name: Build GUI
+        working-directory: ui
+        run: alr -n build
+
+      - name: Build GUI tests
+        working-directory: ui
+        run: alr -n exec -- gprbuild -P ui_checks.gpr
+
+      - name: Run GUI interaction tests
+        working-directory: ui
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_RENDER_DRIVER: software
+        run: |
+          ./bin/timeline_view_tests
+          ./bin/editor_split_tests
+
+      - name: Build CLI for GUI document comparison
+        working-directory: cli
+        run: alr -n build
+
+      - name: Run editor workflow regressions
+        working-directory: ui
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_RENDER_DRIVER: software
+        run: python3 tests/run_regressions.py 2>&1 | tee regression.log
+
+      - name: Upload GUI regression diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gui-regression-diagnostics
+          path: |
+            ui/regression.log
+            ui/obj/regression-driver/framewise_ui_regression.adb
+            ui/obj/regression-driver/regressions.gpr
