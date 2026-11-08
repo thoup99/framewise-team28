@@ -870,9 +870,9 @@ begin
       Set_Flag (+Workspace, Clickable, True);
       Set_Flag (+Main_Split, Clickable, True);
       Set_Part_Style (+Workspace, Indicator_Part, Style.Base
-        ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
+        ((Background_Color => Set_Bg (RGB (8, 33, 71)), others => <>)).Build);
       Set_Part_Style (+Main_Split, Indicator_Part, Style.Base
-        ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
+        ((Background_Color => Set_Bg (RGB (8, 33, 71)), others => <>)).Build);
       Add_Child (+Root, +Menu_Row);
       Add_Child (+Root, +Main_Split);
       Status := Make_Label (+Root, "Ready. Import files and add a track, or open a .fw project.");
