@@ -59,7 +59,7 @@ package body Timeline_View is
                   begin
                      if X >= Pixel_Type'Max (Left, X1) and then X <= Pixel_Type'Min (Right, X2) then
                         if W.Razor_Mode then
-                           return SDL_SYSTEM_CURSOR_CROSSHAIR;
+                           return SDL_SYSTEM_CURSOR_DEFAULT;
                         elsif (X1 >= Left and then X <= X1 + 8.0) or else
                           (X2 <= Right and then X >= X2 - 8.0)
                         then

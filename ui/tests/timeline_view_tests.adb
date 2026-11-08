@@ -93,7 +93,7 @@ begin
       pragma Assert (Timeline_View.Cursor_At (V.Ptr.all, 200.0, 50.0) = SDL_SYSTEM_CURSOR_MOVE);
       pragma Assert (Timeline_View.Cursor_At (V.Ptr.all, 350.0, 50.0) = SDL_SYSTEM_CURSOR_DEFAULT);
       V.Razor_Mode := True;
-      pragma Assert (Timeline_View.Cursor_At (V.Ptr.all, 200.0, 50.0) = SDL_SYSTEM_CURSOR_CROSSHAIR);
+      pragma Assert (Timeline_View.Cursor_At (V.Ptr.all, 200.0, 50.0) = SDL_SYSTEM_CURSOR_DEFAULT);
       V.Razor_Mode := False;
       V.Drag_Active := True;
       pragma Assert (Timeline_View.Cursor_At (V.Ptr.all, -200.0, 50.0) = SDL_SYSTEM_CURSOR_MOVE);

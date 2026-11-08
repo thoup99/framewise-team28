@@ -14,7 +14,7 @@ for the current session and do not modify the project document.
 
 Mouse cursors follow the current action: left/right arrows on the vertical
 pane divider, up/down arrows on the horizontal divider, a move cursor over
-clip bodies, left/right arrows at trim edges and on the ruler, and a crosshair
+clip bodies, left/right arrows at trim edges and on the ruler, and the default pointer
 on clips in razor mode. Buttons and dropdowns use a hand; editable fields use
 a text cursor. Drag cursors remain active until release. Native cursors are
 cached and released when the editor closes.
@@ -33,7 +33,7 @@ cached and released when the editor closes.
    change source in/out and timeline start as needed. The engine validates
    media compatibility, bounds and overlap.
 4. Select a timeline clip. Drag its body to move it or either edge to trim.
-   **Move Clip** and **Trim Clip** provide numeric dialogs. **Razor**
+   **Move Clip** provides a numeric dialog. Trim by dragging a clip edge. **Razor**
    toggles the split tool and lights up blue while active. A vertical guide
    follows the pointer inside clips to show the split position; click to split. **Delete Clip**
    and **Undo** are also available as buttons.
@@ -93,7 +93,7 @@ Manual regression:
 - Start empty; import media with an explicit duration, add a compatible
   track, and place the media. Verify invalid duration and overlapping
   placement display an error and leave the dialog open for correction.
-- Move/trim with both mouse and numeric dialogs; split, delete and undo.
+- Move with both mouse and numeric dialog; trim with clip edges; split, delete and undo.
 - Scrub a video gap and a clip; verify clip/time text changes, without
   adding an edit or marking the project dirty.
 - Save a new project, edit and Save, then Save As. Reopen both files to

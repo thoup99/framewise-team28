@@ -77,9 +77,9 @@ procedure Framewise_UI is
    type Label_Array is array (Positive range 1 .. 3) of Labels.Label_Handle;
    Captions : Label_Array;
    File_Button, Add_Track_Button, Place_Button, Undo_Button,
-     Delete_Button, Razor_Button, Move_Button, Properties_Button,
+     Delete_Button, Razor_Button, Move_Button,
      Zoom_In, Zoom_Out, Scroll_Left, Scroll_Right, Start_Button : Buttons.Button_Handle;
-   type Form_Mode is (Import_Media, Add_Track, Place_Clip, Edit_Clip, Move_Clip, Project_Settings);
+   type Form_Mode is (Import_Media, Add_Track, Place_Clip, Move_Clip, Project_Settings);
    Mode : Form_Mode := Import_Media;
    type Pending_Action is (Nothing, New_Project, Open_Project, Close_Editor);
    Pending : Pending_Action := Nothing;
@@ -308,9 +308,6 @@ procedure Framewise_UI is
             Execute_Line ("place " & US.To_String (Form_Target) & " " &
               Combos.Get_Selected_Text (Track_Choice) & " " & Combos.Get_Selected_Text (Source_Choice) &
               " " & Field (1) & " " & Field (2) & " " & Field (3));
-         when Edit_Clip =>
-            --  Each Apply is a single, undoable operation.
-            Execute_Line ("trim " & US.To_String (Form_Target) & " " & Field (1) & " " & Field (2));
          when Move_Clip =>
             Execute_Line ("move " & US.To_String (Form_Target) & " " & Field (1));
          when Project_Settings =>
@@ -477,7 +474,7 @@ procedure Framewise_UI is
    begin
       Set_Focus (W, +Tracks);
       Tell ((if Name'Length = 0 then "No clip selected."
-             else "Selected: " & Name & ". Drag to move, drag an edge to trim, or use Trim / Delete."));
+             else "Selected: " & Name & ". Drag to move, drag an edge to trim, or use Move / Delete."));
    end Clip_Selected;
 
    procedure Delete_Selected is
@@ -530,7 +527,7 @@ procedure Framewise_UI is
             Set_Field (3, "Timeline start (seconds)", FS.Image_Time (V.Playhead));
          end;
          Dialogs.Show (Form);
-      elsif Button = Widget_Handle'(+Properties_Button) or else Button = Widget_Handle'(+Move_Button) then
+      elsif Button = Widget_Handle'(+Move_Button) then
          declare
             V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
          begin
@@ -539,14 +536,8 @@ procedure Framewise_UI is
          for T of FS.Sequence_Of (Editor).Tracks loop
             for I in 1 .. T.Count loop
                if T.Used and then Framewise.Image (T.Clips (I).N) = US.To_String (Form_Target) then
-                  if Button = Widget_Handle'(+Move_Button) then
-                     Prepare_Form (Move_Clip, "Move selected clip");
-                     Set_Field (1, "Timeline start (seconds)", FS.Image_Time (T.Clips (I).Start));
-                  else
-                     Prepare_Form (Edit_Clip, "Trim selected clip");
-                     Set_Field (1, "Source in (seconds)", FS.Image_Time (T.Clips (I).Src_In));
-                     Set_Field (2, "Source out (seconds)", FS.Image_Time (T.Clips (I).Src_Out));
-                  end if;
+                  Prepare_Form (Move_Clip, "Move selected clip");
+                  Set_Field (1, "Timeline start (seconds)", FS.Image_Time (T.Clips (I).Start));
                   Dialogs.Show (Form);
                   return;
                end if;
@@ -717,7 +708,7 @@ begin
          if Kind = Mouse.SDL_SYSTEM_CURSOR_DEFAULT then
             declare
                Controls : constant Handles := [+File_Button, +Add_Track_Button, +Place_Button,
-                 +Undo_Button, +Delete_Button, +Razor_Button, +Move_Button, +Properties_Button,
+                 +Undo_Button, +Delete_Button, +Razor_Button, +Move_Button,
                  +Zoom_In, +Zoom_Out, +Scroll_Left, +Scroll_Right, +Start_Button,
                  +Source_Choice, +Track_Choice, +Kind_Choice,
                  +Dialogs.Get_Button_Handle (Form, 1), +Dialogs.Get_Button_Handle (Form, 2),
@@ -814,7 +805,6 @@ begin
           Border_Radius => Set (Radius (Px (3.0))), others => <>))
         .On_Selected ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
       Move_Button := Make_Button (+Timeline_Tools, "Move Clip");
-      Properties_Button := Make_Button (+Timeline_Tools, "Trim Clip");
       Delete_Button := Make_Button (+Timeline_Tools, "Delete Clip");
       Zoom_Out := Make_Button (+Timeline_Tools, "Zoom -");
       Zoom_In := Make_Button (+Timeline_Tools, "Zoom +");
