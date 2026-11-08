@@ -545,11 +545,14 @@ package body Editor_Controller is
       use type Adi.SDL.Events.SDL_Keymod;
       Ctrl : constant Boolean := (Key_Mod and Adi.SDL.Events.SDL_KMOD_CTRL) /= 0;
    begin
-      if Overlay_Count (W) > 0 then
+      if Editor_Console.Is_Open then
+         --  Leave nested context menus and dialogs in charge of their keys.
+         if Overlay_Count (W) = 1 then
+            Editor_Console.Handle_Key (Scancode, Repeat, Handled);
+         end if;
          return;
       end if;
-      if Editor_Console.Is_Open and then Editor_Console.Has_Focus then
-         Editor_Console.Handle_Key (Scancode, Repeat, Handled);
+      if Overlay_Count (W) > 0 then
          return;
       end if;
       if Repeat then

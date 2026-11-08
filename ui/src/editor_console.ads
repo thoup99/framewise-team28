@@ -7,8 +7,6 @@ package Editor_Console is
 
    function Is_Open return Boolean;
 
-   function Has_Focus return Boolean;
-
    --  Append only while open, preserving the command field and its focus.
    procedure Record_Command (Line, Response : String; Origin : Command_Origin);
 

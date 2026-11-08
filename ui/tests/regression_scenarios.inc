@@ -329,8 +329,8 @@
                    "Console button belongs at far right of top bar");
             Click_Control (+Console_Button);
             Render (W);
-            Check (Is_Visible (+Console_Panel), "Console button opens floating panel");
-            Check (Overlay_Count (W) = 0, "Console must leave editor interactive");
+            Check (Dialogs.Is_Shown (Console_Dialog), "Console button opens centered dialog");
+            Check (Overlay_Count (W) = 1, "Console must block editor interaction");
             Check (Get_Focus_Handle (W) = Widget_Handle'(+Console_Input), "Console opens ready to type");
             for I in 1 .. Item_Count (+Console_Input) loop
                declare
@@ -388,7 +388,7 @@
             Render (W);
             Before := US.To_Unbounded_String (Adi.Widget.Text_Editor.Get_Text (Console_Output));
             Click_Control (+Console_Close_Button);
-            Check (not Is_Visible (+Console_Panel), "Close dismisses console");
+            Check (not Dialogs.Is_Shown (Console_Dialog), "Close dismisses console");
             Check (Get_Focus_Handle (W) = Widget_Handle'(+Tracks), "Close returns focus to editor");
             Render (W);
             Click_Control (+Console_Button);
@@ -430,53 +430,35 @@
               "Editor command logged once under editor origin");
             Inputs.Set_Text (Console_Input, "");
 
-            --  Real routed editor clicks must work with the console still open.
-            Render (W);
-            Click_Control (+Add_Track_Button);
-            Check (Dialogs.Is_Shown (Form), "Console must not block editor buttons");
-            Inputs.Set_Text (Values (1), "Observed");
-            Apply;
-            Check (Reply.Ok and then Is_Visible (+Console_Panel), "Editor action leaves console open");
-            Check (Ada.Strings.Fixed.Count
-              (Adi.Widget.Text_Editor.Get_Text (Console_Output), "[Editor] track Observed video") = 1,
-              "Track dialog command appears once");
-            Before := US.To_Unbounded_String (Adi.Widget.Text_Editor.Get_Text (Console_Output));
-            Render (W);
-            Click_Control (+Zoom_In);
-            Click_Control (+Scroll_Right);
-            Click_Control (+Start_Button);
-            Click_Control (+Filter_Buttons (Video_Media));
-            Check (US.To_Unbounded_String (Adi.Widget.Text_Editor.Get_Text (Console_Output)) = Before,
-                   "Navigation and filters must not clutter command log");
-
-            Stage ("timeline drag emits one editor command on release");
+            Stage ("centered modal console blocks background interaction");
             Render (W);
             declare
-               G : constant Rectangle := Geometry_In_Window (+Tracks);
+               G : constant Rectangle := Get_Geometry (+Console_Panel);
+               Size : constant Size_2D := Get_Size (W);
                V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
-               Step : constant Pixel_Type := Pixel_Type (V.Zoom);
-               X : constant Pixel_Type := G.X + 110.0 + 2.0 * Step;
-               Y : constant Pixel_Type := G.Y + 50.0;
+               Old_Zoom : constant Long_Float := V.Zoom;
+               Saved : constant US.Unbounded_String := History;
+               Track_G : constant Rectangle := Geometry_In_Window (+Tracks);
             begin
-               Adi.Window.On_Mouse_Down (W, X, Y, Left_Button);
-               Adi.Window.On_Mouse_Move (W, X + Step / 2.0, Y);
-               Adi.Window.On_Mouse_Move (W, X + Step, Y);
-               Check (US.To_Unbounded_String (Adi.Widget.Text_Editor.Get_Text (Console_Output)) = Before,
-                      "Intermediate drag motion must not log commands");
-               Adi.Window.On_Mouse_Up (W, X + Step, Y, Left_Button);
+               Check (abs (G.X + G.Width / 2.0 - Size.Width / 2.0) < 1.0 and then
+                 abs (G.Y + G.Height / 2.0 - Size.Height / 2.0) < 1.0,
+                 "Console is centered on the editor window");
+               Click_Control (+Add_Track_Button);
+               Check (not Dialogs.Is_Shown (Form), "Modal console blocks Add Track button");
+               Click_Control (+Undo_Button);
+               Click_Control (+Zoom_In);
+               Click_Control (+File_Button);
+               Adi.Window.On_Mouse_Down (W, Track_G.X + 160.0, Track_G.Y + 50.0, Left_Button);
+               Adi.Window.On_Mouse_Move (W, Track_G.X + 190.0, Track_G.Y + 50.0);
+               Adi.Window.On_Mouse_Up (W, Track_G.X + 190.0, Track_G.Y + 50.0, Left_Button);
+               Check (History = Saved and then V.Zoom = Old_Zoom,
+                      "Backdrop blocks editor edits and navigation");
+               Check (not V.Drag_Active and then not V.Scrubbing,
+                      "Backdrop blocks timeline gestures");
+               Check (Dialogs.Is_Shown (Console_Dialog) and then Overlay_Count (W) = 1,
+                      "Background clicks neither dismiss console nor open File menu");
             end;
-            Check (Reply.Ok and then FS.Sequence_Of (Editor).Tracks (1).Clips (1).Start = Framewise.Timebase,
-                   "Timeline remains interactive while console is open");
-            Check (Ada.Strings.Fixed.Count
-              (Adi.Widget.Text_Editor.Get_Text (Console_Output), "[Editor] move c1 1") = 1,
-              "A completed drag logs only its final command");
-            Render (W);
-            Click_Control (+Undo_Button);
-            Check (Reply.Ok and then FS.Sequence_Of (Editor).Tracks (1).Clips (1).Start = 0,
-                   "Routed undo works with console open");
-            Check (Ada.Strings.Fixed.Count
-              (Adi.Widget.Text_Editor.Get_Text (Console_Output), "[Editor] undo") = 1,
-              "Undo appears as an editor action");
+            Set_Focus (W, +Console_Input);
             Execute_Line ("move c1 5");
             Check (not Reply.Ok and then Ada.Strings.Fixed.Index
               (Adi.Widget.Text_Editor.Get_Text (Console_Output), "[Editor] move c1 5" &
@@ -517,9 +499,16 @@
                  G.X >= 0.0 and then G.X + G.Width <= 960.0 and then
                  G.Y >= 0.0 and then G.Y + G.Height <= 650.0,
                  "Console input remains accessible in a smaller window");
+               declare
+                  Panel : constant Rectangle := Get_Geometry (+Console_Panel);
+               begin
+                  Check (abs (Panel.X + Panel.Width / 2.0 - 480.0) < 1.0 and then
+                    abs (Panel.Y + Panel.Height / 2.0 - 325.0) < 1.0,
+                    "Modal console stays centered after window resize");
+               end;
             end;
             Adi.Window.On_Key_Down (W, Adi.SDL.Events.SDL_SCANCODE_ESCAPE, 0, 0, False);
-            Check (not Is_Visible (+Console_Panel), "Escape dismisses console");
+            Check (not Dialogs.Is_Shown (Console_Dialog), "Escape dismisses console");
          end;
          Ada.Text_IO.Put_Line ("PASS: editor workflow regression scenarios");
       end;

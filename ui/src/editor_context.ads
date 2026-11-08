@@ -41,6 +41,7 @@ package Editor_Context is
    Form, Confirm : Dialogs.Dialog_Handle;
    Form_Content : Boxes.Box_Handle;
 
+   Console_Dialog : Dialogs.Dialog_Handle;
    Console_Panel : Boxes.Box_Handle;
    Console_Run_Button, Console_Close_Button : Buttons.Button_Handle;
    Console_Input : Inputs.Text_Input_Handle;

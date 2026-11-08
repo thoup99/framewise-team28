@@ -32,8 +32,9 @@ to reach tracks below the viewport. It hides when all tracks fit.
 ## Optional console
 
 Click **Console** in the upper-right corner to open **Framewise Console** above
-the editor without blocking timeline or toolbar actions. The command field receives focus immediately and has a bright
-blinking caret and a `>` prompt. Press **Enter** or **Run** to submit a command;
+the editor as a centered modal window. Editor controls are blocked until it
+is closed; clicking the background does not dismiss it. The command field
+receives focus immediately and has a bright blinking caret and a `>` prompt. Press **Enter** or **Run** to submit a command;
 the scrollable transcript shows the command and its response, including errors.
 **Close** or **Escape** returns to the editor. The transcript and unfinished
 input remain available when the console is reopened during the same session.
@@ -41,10 +42,9 @@ input remain available when the console is reopened during the same session.
 The console uses the same project session as the GUI. For example,
 `track Main_Video video` creates a track and refreshes the timeline and target
 track selector; `list` inspects the current project and `undo` undoes its latest
-edit. While the console is open, project operations from editor buttons,
-dialogs, and timeline gestures appear with an `[Editor]` label and their response.
-Typed commands use `[Console]` and appear once. Clip dragging logs only on
-release; selection, filters, zooming, scrolling, and resizing are not logged.
+edit. Command entries retain their origin labels: `[Editor]` for editor
+operations and `[Console]` for typed commands. Typed commands appear once;
+selection, filters, zooming, scrolling, and resizing are not logged.
 Closing the console stops collection but retains its transcript and unfinished
 input. Incoming editor output does not change input focus or the caret position.
 
@@ -170,7 +170,7 @@ results, named tracks and validation, caret/focus, placement and move dialogs,
 Razor selected state, navigation, settings, real export (including failure),
 save/save-as and cancellation, native window titles, unsaved-change prompts,
 routed divider dragging and routed scrollbar thumb/track interaction. Console
-checks cover button placement, non-blocking opening, a rendered caret, routed typing,
+checks cover button placement, modal opening, a rendered caret, routed typing,
 Enter/Run, errors, save/load bookkeeping, and transcript persistence.
 It verifies the exported video with ffprobe and compares GUI and CLI saved
 `.fw` documents byte for byte. Test files live in a disposable temporary folder.
