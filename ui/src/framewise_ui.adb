@@ -922,7 +922,16 @@ begin
       Menus.Set_Menu_Part_Styles (File_Menu,
         (Main_Part => (Style => Style.Base (Panel_Style).Build, Enabled => True), others => <>));
       Menus.Set_Item_Part_Styles (File_Menu,
-        (Label_Part => (Style => Style.Base (Text_Style).Build, Enabled => True), others => <>));
+        (Main_Part =>
+           (Style => Style.Base
+              ((Padding => Set (CSS_Box (Px (6.0), Px (8.0))), others => <>))
+              .On_Hover
+                ((Background_Color => Set_Bg (RGB (45, 78, 119)), others => <>))
+              .On_Selected
+                ((Background_Color => Set_Bg (RGB (45, 78, 119)), others => <>)).Build,
+            Enabled => True),
+         Label_Part => (Style => Style.Base (Text_Style).Build, Enabled => True),
+         others => <>));
       Menus.Add_Item (File_Menu, "New Project     Ctrl+N");
       Menus.Add_Item (File_Menu, "Open Project    Ctrl+O");
       Menus.Add_Item (File_Menu, "Save            Ctrl+S");
