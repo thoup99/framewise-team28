@@ -47,7 +47,8 @@ package body Editor_Layout is
       begin
          for H of Rows loop
             Set_Part_Style (+H, Main_Part, Style.Base
-              ((Row_Style with delta Flex_Wrap => Set (Wrap))).Build);
+              ((Row_Style with delta Flex_Wrap => Set (Wrap),
+                Align_Items => Set (Align_Items_Value'(Center)))).Build);
          end loop;
       end;
 
