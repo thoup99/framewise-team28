@@ -138,6 +138,14 @@ procedure Framewise_UI is
       Title : Interfaces.C.Strings.chars_ptr) return Interfaces.C.Extensions.bool
      with Import, Convention => C, External_Name => "SDL_SetWindowTitle";
 
+   function Set_Window_Position
+     (Window : Adi.SDL.Video.SDL_Window_Ptr; X, Y : Interfaces.C.int)
+      return Interfaces.C.Extensions.bool
+     with Import, Convention => C, External_Name => "SDL_SetWindowPosition";
+   --  SDL_WINDOWPOS_CENTERED on the default display.
+   Centered_Position : constant Interfaces.C.int := 16#2FFF0000#;
+   Form_Control_Width : constant Float := 360.0;
+
    procedure Update_Title is
       Title : Interfaces.C.Strings.chars_ptr := Interfaces.C.Strings.New_String
         ("Framewise" & (if US.Length (Project_Path) = 0 then "" else
@@ -549,6 +557,7 @@ procedure Framewise_UI is
          Prepare_Form (Add_Track, "Add Track - name and media type");
          Set_Field (1, "Track name (letters, numbers, underscores)", US.To_String (Form_Target));
          Dialogs.Show (Form);
+         Set_Focus (W, +Values (1));
       elsif Button = Widget_Handle'(+Place_Button) then
          if Combos.Get_Selected_Index (Source_Choice) = 0 or else Combos.Get_Selected_Index (Track_Choice) = 0 then
             Tell ("Import a media file and add a track before adding a clip.");
@@ -695,6 +704,13 @@ begin
    Adi.Layout_Util.Set_Px_Maps_To_Dip (True);
    A.Set_Target_FPS (60);
    W := Create_Window_Handle ("Framewise", Adi.Window.Extent (Px (1280.0), Px (850.0)));
+   declare
+      Positioned : constant Interfaces.C.Extensions.bool := Set_Window_Position
+        (Get_SDL_Window (W), Centered_Position, Centered_Position);
+      pragma Unreferenced (Positioned);
+   begin
+      null;
+   end;
    declare
       Root, Menu_Row, Filter_Row, Bin, Monitor, Lower, Timeline_Tools,
         Placement_Row, Track_Scroll : Boxes.Box_Handle;
@@ -949,15 +965,26 @@ begin
       for I in Values'Range loop
          Captions (I) := Make_Label (+Form_Content, "");
          Values (I) := Inputs.Create_Handle ("");
-         Inputs.Set_Min_Visible_Chars (Values (I), 40);
+         Inputs.Set_Min_Visible_Chars (Values (I), 24);
          Set_Part_Style (+Values (I), Text_Part, Style.Base (Text_Style).Build);
+         Set_Part_Style (+Values (I), Cursor_Part, Style.Base
+           ((Background_Color => Set_Bg (RGB (240, 245, 255)), others => <>)).Build);
+         Set_Part_Style (+Values (I), Selected_Part, Style.Base
+           ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
          Set_Part_Style (+Values (I), Main_Part, Style.Base
-           ((Background_Color => Set_Bg (RGB (38, 50, 67)),
+           ((Width => Set (Size (Px (Form_Control_Width))),
+             Background_Color => Set_Bg (RGB (38, 50, 67)),
              Padding => Set (CSS_Box (Px (6.0))), others => <>)).Build);
          Add_Child (+Form_Content, +Values (I));
       end loop;
       Kind_Choice := Combos.Create_Handle;
       Style_Combo (Kind_Choice);
+      Set_Part_Style (+Kind_Choice, Main_Part, Style.Base
+        ((Display => Set (Flex), Flex_Direction => Set (Row),
+          Width => Set (Size (Px (Form_Control_Width))),
+          Height => Set (Size (Px (38.0))), Flex_Shrink => Set (0.0),
+          Background_Color => Set_Bg (RGB (38, 50, 67)),
+          Padding => Set (CSS_Box (Px (6.0))), others => <>)).Build);
       Combos.Add_Item (Kind_Choice, "video");
       Combos.Add_Item (Kind_Choice, "audio");
       Combos.Add_Item (Kind_Choice, "both");
