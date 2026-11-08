@@ -867,10 +867,6 @@ begin
           Background_Color => Set_Bg (RGB (20, 26, 36)), others => <>)).Build);
       Set_Part_Style (+Sources, Text_Part, Style.Base (Text_Style).Build);
       Add_Child (+Bin, +Sources);
-      Add_Label (+Bin, "Selected media");
-      Source_Choice := Combos.Create_Handle;
-      Style_Combo (Source_Choice);
-      Add_Child (+Bin, +Source_Choice);
       Add_Label (+Monitor, "Video Preview");
       Preview := Make_Label (+Monitor, "");
       Set_Part_Style (+Preview, Main_Part, Style.Base
@@ -930,6 +926,10 @@ begin
       Zoom_In := Make_Button (+Timeline_Tools, "Zoom +");
       Scroll_Left := Make_Button (+Timeline_Tools, "Earlier");
       Scroll_Right := Make_Button (+Timeline_Tools, "Later");
+      Add_Label (+Placement_Row, "Select media");
+      Source_Choice := Combos.Create_Handle;
+      Style_Combo (Source_Choice);
+      Add_Child (+Placement_Row, +Source_Choice);
       Add_Label (+Placement_Row, "Target track");
       Track_Choice := Combos.Create_Handle;
       Style_Combo (Track_Choice);

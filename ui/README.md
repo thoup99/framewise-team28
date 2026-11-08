@@ -21,7 +21,7 @@ cached and released when the editor closes.
 
 Project Files has **All**, **Video**, and **Audio** filters. All is selected
 initially and when starting or opening a project. The active filter is lit
-blue and also filters the Selected media dropdown. Combined video/audio
+blue and also filters the Select media dropdown in the timeline. Combined video/audio
 sources appear in both Video and Audio. Filtering changes only the view;
 it does not remove sources or edit the project.
 
@@ -36,7 +36,7 @@ to reach tracks below the viewport. It hides when all tracks fit.
 2. Choose **Import Files** and select a media file. Enter its duration in
    seconds and choose `video`, `audio`, or `both`. Duration is still manual
    at this stage of the semester plan. Imported files appear in Project
-   Files and the Selected media dropdown.
+   Files and the Select media dropdown in the timeline.
 3. Use **Add Track** to enter a track name and choose video, audio or combined
    media. Names use up to 32 letters, numbers or underscores; a generated
    name is supplied as a starting point. Choose it
