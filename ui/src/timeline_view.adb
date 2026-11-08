@@ -86,6 +86,8 @@ package body Timeline_View is
          for Track of Seq.Tracks loop
             if Track.Used then
                Any_Track := True;
+               Add_Item (W, Make_Panel (Custom_Part,
+                 (G.X, Y + 1.0, G.Width, 44.0), 0));
                Label ((G.X + 8.0, Y + 8.0, 100.0, 28.0), Framewise.Image (Track.N));
                for I in 1 .. Track.Count loop
                   declare
@@ -202,7 +204,7 @@ package body Timeline_View is
               (X, G.Y, Pixel_Type'Min (2.0, Right - X), G.Height), 4));
          end if;
          if not Any_Track then
-            Label ((Left, Y, Right - Left, 30.0), "No tracks. Load a project below.");
+            Label ((Left, Y, Right - Left, 30.0), "No tracks. Use Add Track to begin.");
          end if;
       end;
    end Build_Items;
