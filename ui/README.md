@@ -53,7 +53,10 @@ Editor operations are recorded even while the console is closed, including
 opening a project and deleting clips. Open the console after editing to inspect
 the commands and their results. Closing it retains the transcript and unfinished
 input for the current application session. Recording does not open the console
-or change input focus or the caret position.
+or change input focus or the caret position. Validation errors caught before a
+command runs (such as an invalid track name, unsupported path, or missing
+selection) are also recorded with the action name and an `err` response.
+Canceled dialogs and view-only controls do not create command entries.
 
 Successful `save path.fw` and `load path.fw` commands also update the
 current document path, window title, and unsaved-change state. Console commands

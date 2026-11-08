@@ -47,7 +47,7 @@ package body Editor_Dialogs is
       end if;
       case Mode is
          when Import_Media =>
-            if not Valid_Path (Field (1)) then
+            if not Valid_Path (Field (1), "Import Files") then
                return;
             end if;
             Execute_Line ("import " & US.To_String (Form_Target) & " " & Field (1) &
@@ -56,8 +56,12 @@ package body Editor_Dialogs is
             if Field (1)'Length not in 1 .. Framewise.Max_Name or else
               (for some C of Field (1) => C not in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_')
             then
-               Dialogs.Set_Title (Form,
-                 "Track name: use 1-32 letters, numbers, or underscores");
+               declare
+                  Message : constant String := "Track name: use 1-32 letters, numbers, or underscores";
+               begin
+                  Dialogs.Set_Title (Form, Message);
+                  Report_Editor_Error ("Add Track", Message);
+               end;
                return;
             end if;
             Execute_Line ("track " & Field (1) & " " & Combos.Get_Selected_Text (Kind_Choice));
@@ -82,7 +86,7 @@ package body Editor_Dialogs is
       if Files'Length = 0 then
          return;
       end if;
-      if not Valid_Path (US.To_String (Files (Files'First))) then
+      if not Valid_Path (US.To_String (Files (Files'First)), "Import Files") then
          return;
       end if;
       Form_Target := US.To_Unbounded_String (Unique_Name ("media"));

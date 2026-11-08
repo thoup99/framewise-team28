@@ -15,6 +15,13 @@
             end if;
          end Check;
 
+         procedure Check_Editor_Log (Line : String; Expected : Natural := 1) is
+         begin
+            Check (Ada.Strings.Fixed.Count (Adi.Widget.Text_Editor.Get_Text (Console_Output),
+              "[Editor] " & Line & Ada.Characters.Latin_1.LF) = Expected,
+              "Editor log count for " & Line);
+         end Check_Editor_Log;
+
          procedure Stage (Name : String) is
          begin
             Ada.Text_IO.Put_Line ("CHECK: " & Name);
@@ -53,12 +60,45 @@
          Assert_Centered;
          Check (Get_Scroll_Max_Offset_Y (+Track_Scroll) = 0.0, "Empty timeline must not overflow");
 
+         Stage ("button validation failures reach the closed console");
+         Initial_History := History;
+         Clicked (+Delete_Button);
+         Check_Editor_Log ("Delete Clip");
+         Clicked (+Move_Button);
+         Check_Editor_Log ("Move Clip");
+         Clicked (+Place_Button);
+         Check_Editor_Log ("Add Selected Media to Track");
+         Import_Selected (Files (Test_Dir & "/bad path.mp4"));
+         Check_Editor_Log ("Import Files");
+         Open_Selected (Files (Test_Dir & "/bad path.fw"));
+         Check_Editor_Log ("Open Project");
+         Save_Selected (Files (Test_Dir & "/bad path.fw"));
+         Check_Editor_Log ("Save Project");
+         Export_Selected (Files (Test_Dir & "/bad path.mp4"));
+         Check_Editor_Log ("Export Video");
+         Check (History = Initial_History and then not Dirty and then
+           not Dialogs.Is_Shown (Form) and then not Dialogs.Is_Shown (Console_Dialog),
+           "Validation logging must not run commands or open dialogs");
+         Check (Ada.Strings.Fixed.Count (Adi.Widget.Text_Editor.Get_Text (Console_Output),
+           Ada.Characters.Latin_1.LF & "err ") = 7, "Every validation entry has an error response");
+         declare
+            Before : constant String := Adi.Widget.Text_Editor.Get_Text (Console_Output);
+         begin
+            Import_Selected (Adi.OS.Empty_Strings);
+            Open_Selected (Adi.OS.Empty_Strings);
+            Save_Selected (Adi.OS.Empty_Strings);
+            Export_Selected (Adi.OS.Empty_Strings);
+            Check (Adi.Widget.Text_Editor.Get_Text (Console_Output) = Before,
+                   "Canceled file pickers do not create phantom command entries");
+         end;
+
          Stage ("import callback, filters and canceled import");
          Import_Selected (Files (Test_Dir & "/video.mp4"));
          Check (Dialogs.Is_Shown (Form), "Import should request duration");
          Inputs.Set_Text (Values (2), "3");
          Apply;
          Check (Reply.Ok, "Video import should succeed");
+         Check_Editor_Log ("import " & US.To_String (Form_Target) & " " & Test_Dir & "/video.mp4 3 video");
          Execute_Line ("import music " & Test_Dir & "/audio.wav 3 audio");
          Check (Reply.Ok, "Audio registration");
          Execute_Line ("import combined " & Test_Dir & "/both.mp4 3 both");
@@ -100,6 +140,7 @@
          Inputs.Set_Text (Values (1), "Main_Video");
          Apply;
          Check (Reply.Ok and then not Dialogs.Is_Shown (Form), "Named track creation");
+         Check_Editor_Log ("track Main_Video video");
          Check (Framewise.Image (FS.Sequence_Of (Editor).Tracks (1).N) = "Main_Video",
                 "Entered track name must reach the model");
          Initial_History := History;
@@ -116,6 +157,7 @@
          Inputs.Set_Text (Values (1), "abcdefghijklmnopqrstuvwxyz1234567");
          Apply;
          Check (History = Initial_History, "Overlong name rejected");
+         Check_Editor_Log ("Add Track", 3);
          Form_Result (Null_Handle, 2, "Cancel");
 
          Stage ("clip placement, numeric move, rejected overlap and undo");
@@ -128,6 +170,8 @@
          Inputs.Set_Text (Values (3), "0");
          Apply;
          Check (Reply.Ok, "Place selected media");
+         Check_Editor_Log ("place " & US.To_String (Clip_Name) & " Main_Video " &
+           Combos.Get_Selected_Text (Source_Choice) & " 0 2 0");
          declare
             T : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
          begin
@@ -137,10 +181,12 @@
          Inputs.Set_Text (Values (1), "0.5");
          Apply;
          Check (Reply.Ok, "Numeric move");
+         Check_Editor_Log ("move " & US.To_String (Clip_Name) & " 0.5");
          Check (FS.Sequence_Of (Editor).Tracks (1).Clips (1).Start = Framewise.Timebase / 2,
                 "Move start applied");
          Clicked (+Undo_Button);
          Check (FS.Sequence_Of (Editor).Tracks (1).Clips (1).Start = 0, "Undo move");
+         Check_Editor_Log ("undo");
          Initial_History := History;
          Clicked (+Place_Button);
          Inputs.Set_Text (Values (1), "0");
@@ -177,17 +223,21 @@
          Inputs.Set_Text (Values (3), "24");
          Apply;
          Check (Reply.Ok and then FS.Settings_Of (Editor).Width = 320, "Settings dialog");
+         Check_Editor_Log ("settings 320 180 24");
          Export_Selected (Files (Test_Dir & "/export.mp4"));
          Check (Reply.Ok and then Ada.Directories.Exists (Test_Dir & "/export.mp4"), "Real GUI export");
+         Check_Editor_Log ("export " & Test_Dir & "/export.mp4");
          Initial_History := History;
          Export_Selected (Files (Test_Dir & "/missing/export.mp4"));
          Check (not Reply.Ok, "Failed export must report failure");
+         Check_Editor_Log ("export " & Test_Dir & "/missing/export.mp4");
          Export_Selected (Adi.OS.Empty_Strings);
          Check (History = Initial_History, "Export/failure/cancel must not edit project");
 
          Stage ("save, save-as, cancel, dirty state and reopen");
          Save_Selected (Files (Test_Dir & "/first"));
          Check (US.To_String (Project_Path) = Test_Dir & "/first.fw", "First save adds extension");
+         Check_Editor_Log ("save " & Test_Dir & "/first.fw");
          Check (not Dirty, "Successful save clears dirty state");
          Save_Selected (Adi.OS.Empty_Strings);
          Check (US.To_String (Project_Path) = Test_Dir & "/first.fw", "Canceled save keeps path");
@@ -213,8 +263,10 @@
          end;
          Save_Project;
          Check (not Dirty, "Save writes to current path");
+         Check_Editor_Log ("save " & Test_Dir & "/first.fw", 2);
          Save_Selected (Files (Test_Dir & "/gui.fw"));
          Check (US.To_String (Project_Path) = Test_Dir & "/gui.fw", "Save As changes active path");
+         Check_Editor_Log ("save " & Test_Dir & "/gui.fw");
          Check (Interfaces.C.Strings.Value (Native_Title (Get_SDL_Window (W))) = "Framewise gui",
                 "Save As updates native window title");
          Execute_Line ("track Temporary audio");
@@ -225,6 +277,7 @@
          Check (not Dirty, "Save after Save As uses new current document");
          Request_Action (New_Project);
          Check (FS.History_Length (Editor) = 0 and then US.Length (Project_Path) = 0, "New clears project");
+         Check_Editor_Log ("New Project");
          Open_Selected (Files (Test_Dir & "/first.fw"));
          Check (Reply.Ok and then FS.Sequence_Of (Editor).Tracks (2).Used, "Save persisted later edit");
          Check (not FS.Sequence_Of (Editor).Tracks (3).Used, "Save As must preserve original document");
@@ -559,6 +612,41 @@
             end;
             Adi.Window.On_Key_Down (W, Adi.SDL.Events.SDL_SCANCODE_ESCAPE, 0, 0, False);
             Check (not Dialogs.Is_Shown (Console_Dialog), "Escape dismisses console");
+
+            Stage ("released timeline gestures use the same editor log");
+            Open_Selected (Files ("examples/cut.fw"));
+            Render (W);
+            declare
+               G : constant Rectangle := Geometry_In_Window (+Tracks);
+               V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+               Step : constant Pixel_Type := Pixel_Type (V.Zoom);
+               X : constant Pixel_Type := G.X + 110.0 + 2.0 * Step;
+               Y : constant Pixel_Type := G.Y + 50.0;
+               Edge : constant Pixel_Type := G.X + 110.0 + 7.5 * Step - 1.0;
+            begin
+               Before := US.To_Unbounded_String (Adi.Widget.Text_Editor.Get_Text (Console_Output));
+               Adi.Window.On_Mouse_Down (W, X, Y, Left_Button);
+               Adi.Window.On_Mouse_Move (W, X + Step / 2.0, Y);
+               Adi.Window.On_Mouse_Move (W, X + Step, Y);
+               Check (US.To_Unbounded_String (Adi.Widget.Text_Editor.Get_Text (Console_Output)) = Before,
+                      "Drag motion is not logged until release");
+               Adi.Window.On_Mouse_Up (W, X + Step, Y, Left_Button);
+               Check (Reply.Ok, "Move gesture succeeds");
+               Check_Editor_Log ("move c1 1");
+               Render (W);
+               Adi.Window.On_Mouse_Down (W, Edge, Y, Left_Button);
+               Adi.Window.On_Mouse_Move (W, Edge - Step / 2.0, Y);
+               Adi.Window.On_Mouse_Up (W, Edge - Step / 2.0, Y, Left_Button);
+               Check (Reply.Ok, "Trim gesture succeeds");
+               Check_Editor_Log ("trim c1 2 8");
+               Render (W);
+               Clicked (+Razor_Button);
+               Adi.Window.On_Mouse_Down (W, G.X + 110.0 + 3.0 * Step, Y, Left_Button);
+               Adi.Window.On_Mouse_Up (W, G.X + 110.0 + 3.0 * Step, Y, Left_Button);
+               Check (Reply.Ok, "Razor split succeeds");
+               Check_Editor_Log ("split c1 3 r1");
+               Clicked (+Razor_Button);
+            end;
          end;
          Ada.Text_IO.Put_Line ("PASS: editor workflow regression scenarios");
       end;

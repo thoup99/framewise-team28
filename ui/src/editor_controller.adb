@@ -61,6 +61,12 @@ package body Editor_Controller is
       Labels.Set_Text (Status, Text);
    end Tell;
 
+   procedure Report_Editor_Error (Action, Message : String) is
+   begin
+      Tell (Message);
+      Editor_Console.Record_Command (Action, "err " & Message, Editor_Console.Editor_Action);
+   end Report_Editor_Error;
+
    function History return US.Unbounded_String is
       Result : US.Unbounded_String;
    begin
@@ -173,12 +179,13 @@ package body Editor_Controller is
       (for all C of Text => C in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' |
         '/' | '\' | ':' | '.' | '_' | '-'));
 
-   function Valid_Path (Text : String) return Boolean is
+   function Valid_Path (Text, Action : String) return Boolean is
    begin
       if Safe_Path (Text) then
          return True;
       end if;
-      Tell ("Choose a path using letters, numbers, dots, dashes or underscores; spaces are not supported yet.");
+      Report_Editor_Error (Action,
+        "Choose a path using letters, numbers, dots, dashes or underscores; spaces are not supported yet.");
       return False;
    end Valid_Path;
 
@@ -217,7 +224,7 @@ package body Editor_Controller is
          Path : constant String := (if Raw'Length >= 3 and then Raw (Raw'Last - 2 .. Raw'Last) = ".fw"
                                     then Raw else Raw & ".fw");
       begin
-         if not Valid_Path (Path) then
+         if not Valid_Path (Path, "Save Project") then
             return;
          end if;
          Execute_Line ("save " & Path);
@@ -266,7 +273,7 @@ package body Editor_Controller is
       if Files'Length = 0 then
          return;
       end if;
-      if not Valid_Path (US.To_String (Files (Files'First))) then
+      if not Valid_Path (US.To_String (Files (Files'First)), "Open Project") then
          return;
       end if;
       Execute_Line ("load " & US.To_String (Files (Files'First)));
@@ -377,7 +384,7 @@ package body Editor_Controller is
 
    procedure Export_Selected (Files : Adi.OS.String_Array) is
    begin
-      if Files'Length > 0 and then Valid_Path (US.To_String (Files (Files'First))) then
+      if Files'Length > 0 and then Valid_Path (US.To_String (Files (Files'First)), "Export Video") then
          Execute_Line ("export " & US.To_String (Files (Files'First)));
          if Reply.Ok then
             Tell ("Video exported.");
@@ -401,7 +408,7 @@ package body Editor_Controller is
          Name := V.Selected_Clip;
       end;
       if US.Length (Name) = 0 then
-         Tell ("Select a timeline clip first.");
+         Report_Editor_Error ("Delete Clip", "Select a timeline clip first.");
          return;
       end if;
       Execute_Line ("delete " & US.To_String (Name));
@@ -437,7 +444,8 @@ package body Editor_Controller is
          Set_Focus (W, +Values (1));
       elsif Button = Widget_Handle'(+Place_Button) then
          if Combos.Get_Selected_Index (Source_Choice) = 0 or else Combos.Get_Selected_Index (Track_Choice) = 0 then
-            Tell ("Import a media file and add a track before adding a clip.");
+            Report_Editor_Error ("Add Selected Media to Track",
+              "Import a media file and add a track before adding a clip.");
             return;
          end if;
          Form_Target := US.To_Unbounded_String (Unique_Name ("clip"));
@@ -470,7 +478,7 @@ package body Editor_Controller is
                end if;
             end loop;
          end loop;
-         Tell ("Select a timeline clip first.");
+         Report_Editor_Error ("Move Clip", "Select a timeline clip first.");
       else
          declare
             V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);

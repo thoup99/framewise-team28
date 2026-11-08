@@ -10,6 +10,9 @@ package Editor_Controller is
 
    procedure Tell (Text : String);
 
+   --  Surface validation failures that occur before a session command runs.
+   procedure Report_Editor_Error (Action, Message : String);
+
    function History return US.Unbounded_String;
 
    function Read_Sequence return FS.Sequence_View;
@@ -23,7 +26,7 @@ package Editor_Controller is
    --  Execute console commands and synchronize save/load document bookkeeping.
    procedure Execute_Console_Line (Line : String);
 
-   function Valid_Path (Text : String) return Boolean;
+   function Valid_Path (Text, Action : String) return Boolean;
 
    function Unique_Name (Prefix : String) return String;
 
