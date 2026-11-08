@@ -155,7 +155,13 @@ package body Timeline_View is
                Any_Track := True;
                Add_Item (W, Make_Panel (Custom_Part,
                  (G.X, Y + 1.0, G.Width, 44.0), 0));
-               Label ((G.X + 8.0, Y + 8.0, 100.0, 28.0), Framewise.Image (Track.N));
+               --  Keep the media type below the name so it remains readable
+               --  in the fixed track header without changing clip geometry.
+               Label ((G.X + 8.0, Y + 3.0, 100.0, 20.0), Framewise.Image (Track.N));
+               Label ((G.X + 8.0, Y + 24.0, 100.0, 18.0),
+                 (if Track.Kind'Image = "VIDEO" then "Video"
+                  elsif Track.Kind'Image = "AUDIO" then "Audio"
+                  else "Video + Audio"));
                for I in 1 .. Track.Count loop
                   declare
                      C renames Track.Clips (I);

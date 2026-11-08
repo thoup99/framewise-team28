@@ -25,6 +25,10 @@ blue and also filters the Select media dropdown in the timeline. Combined video/
 sources appear in both Video and Audio. Filtering changes only the view;
 it does not remove sources or edit the project.
 
+Each timeline track shows **Video**, **Audio**, or **Video + Audio** beneath
+its name, including when the track is empty. The label reflects the track
+type chosen when it was created.
+
 When tracks exceed the timeline viewport, a vertical scrollbar appears on
 its right edge. Drag the thumb, click the scrollbar track or use the wheel
 to reach tracks below the viewport. It hides when all tracks fit.
