@@ -6,7 +6,7 @@ project Ui_Checks is
    for Object_Dir use "obj/checks";
    for Exec_Dir use "bin";
    for Create_Missing_Dirs use "True";
-   for Main use ("timeline_view_tests.adb");
+   for Main use ("timeline_view_tests.adb", "editor_split_tests.adb");
 
    package Compiler is
       for Default_Switches ("Ada") use

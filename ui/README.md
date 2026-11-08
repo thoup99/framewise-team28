@@ -6,6 +6,13 @@ right, and a full-width timeline below. No command entry or command history
 panel is shown. The shared Session command protocol is an implementation
 detail; users edit through menus, buttons, dialogs and timeline gestures.
 
+Drag the blue vertical divider between Project Files and Video Preview to
+change their widths. Drag the horizontal divider above the timeline controls
+to change the upper workspace and timeline heights. Pane contents follow the
+new dimensions; toolbar rows wrap and crowded panes scroll. Minimum sizes
+keep both sides accessible. Proportions are retained while resizing the window
+for the current session and do not modify the project document.
+
 ## Current workflow
 
 1. Use **File > Open Project** to open an existing `.fw` document, or
@@ -71,6 +78,7 @@ cd ui
 alr build
 alr exec -- gprbuild -P ui_checks.gpr
 ./bin/timeline_view_tests
+./bin/editor_split_tests
 ./bin/framewise_ui
 ```
 

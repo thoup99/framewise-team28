@@ -27,6 +27,7 @@ with Adi.Window; use Adi.Window;
 with Framewise;
 with Framewise.Session;
 with Timeline_View;
+with Editor_Split;
 
 procedure Framewise_UI is
    package FS renames Framewise.Session;
@@ -46,6 +47,7 @@ procedure Framewise_UI is
    use type Combos.Combo_Box_Handle;
    use type Adi.Widget.Text_Editor.Text_Editor_Handle;
    use type Timeline_View.Views.Handle;
+   use type Editor_Split.Views.Handle;
    use type Adi.SDL.Events.SDL_Scancode;
    use type US.Unbounded_String;
    --  SDL's USB scancodes; this pinned Adi binding names only some letters.
@@ -659,32 +661,38 @@ begin
    A.Set_Target_FPS (60);
    W := Create_Window_Handle ("Framewise", Adi.Window.Extent (Px (1280.0), Px (850.0)));
    declare
-      Root, Menu_Row, Toolbar, Workspace, Bin, Monitor, Timeline_Tools,
+      Root, Menu_Row, Toolbar, Bin, Monitor, Lower, Timeline_Tools,
         Placement_Row, Track_Scroll : Boxes.Box_Handle;
+      Workspace, Main_Split : Editor_Split.Views.Handle;
    begin
       Root := Boxes.Create_Handle;
       Menu_Row := Boxes.Create_Handle;
       Toolbar := Boxes.Create_Handle;
-      Workspace := Boxes.Create_Handle;
+      Lower := Boxes.Create_Handle;
       Bin := Boxes.Create_Handle;
       Monitor := Boxes.Create_Handle;
       Timeline_Tools := Boxes.Create_Handle;
       Placement_Row := Boxes.Create_Handle;
       Track_Scroll := Boxes.Create_Handle;
+      Workspace := Editor_Split.Views.New_Widget;
+      Main_Split := Editor_Split.Views.New_Widget;
+      Set_Part_Style (+Lower, Main_Part, Style.Base
+        ((Panel_Style with delta Overflow_Y => Set (Overflow_Auto))).Build);
       Set_Part_Style (+Root, Main_Part, Style.Base (Panel_Style).Build);
       declare
-         Rows : constant Box_Array := [Menu_Row, Toolbar, Workspace, Timeline_Tools, Placement_Row];
+         Rows : constant Box_Array := [Menu_Row, Toolbar, Timeline_Tools, Placement_Row];
       begin
          for H of Rows loop
-            Set_Part_Style (+H, Main_Part, Style.Base (Row_Style).Build);
+            Set_Part_Style (+H, Main_Part, Style.Base
+              ((Row_Style with delta Flex_Wrap => Set (Wrap))).Build);
          end loop;
       end;
       Set_Part_Style (+Workspace, Main_Part, Style.Base
         ((Row_Style with delta Flex_Grow => Set (1.0))).Build);
       Set_Part_Style (+Bin, Main_Part, Style.Base
-        ((Panel_Style with delta Width => Set (Size (Px (390.0))), Flex_Shrink => Set (0.0))).Build);
+        ((Panel_Style with delta Overflow_Y => Set (Overflow_Auto))).Build);
       Set_Part_Style (+Monitor, Main_Part, Style.Base
-        ((Panel_Style with delta Flex_Grow => Set (1.0))).Build);
+        ((Panel_Style with delta Flex_Grow => Set (1.0), Overflow_Y => Set (Overflow_Auto))).Build);
       File_Button := Make_Button (+Menu_Row, "File");
       Project_Title := Make_Label (+Menu_Row, "Untitled Project - Framewise");
       New_Button := Make_Button (+Toolbar, "New Project");
@@ -697,7 +705,7 @@ begin
       Sources := Adi.Widget.Text_Editor.Create_Handle ("");
       Adi.Widget.Text_Editor.Set_Read_Only (Sources);
       Set_Part_Style (+Sources, Main_Part, Style.Base
-        ((Flex_Grow => Set (1.0), Height => Set (Size (Px (180.0))),
+        ((Flex_Grow => Set (1.0), Height => Set (Size (Px (0.0))), Min_Height => Set (Size (Px (40.0))),
           Background_Color => Set_Bg (RGB (20, 26, 36)), others => <>)).Build);
       Set_Part_Style (+Sources, Text_Part, Style.Base (Text_Style).Build);
       Add_Child (+Bin, +Sources);
@@ -708,7 +716,7 @@ begin
       Add_Label (+Monitor, "Video Preview");
       Preview := Make_Label (+Monitor, "");
       Set_Part_Style (+Preview, Main_Part, Style.Base
-        ((Flex_Grow => Set (1.0), Height => Set (Size (Px (220.0))),
+        ((Flex_Grow => Set (1.0), Height => Set (Size (Px (0.0))), Min_Height => Set (Size (Px (40.0))),
           Padding => Set (CSS_Box (Px (24.0))),
           Background_Color => Set_Bg (RGB (0, 0, 0)), others => <>)).Build);
       Start_Button := Make_Button (+Monitor, "Go to Start");
@@ -747,7 +755,7 @@ begin
          V.Selection_Changed := Clip_Selected'Unrestricted_Access;
       end;
       Set_Part_Style (+Track_Scroll, Main_Part, Style.Base
-        ((Height => Set (Size (Px (260.0))), Flex_Shrink => Set (0.0),
+        ((Flex_Grow => Set (1.0), Min_Height => Set (Size (Px (80.0))),
           Overflow_Y => Set (Overflow_Auto), others => <>)).Build);
       Set_Part_Style (+Tracks, Label_Part, Style.Base (Text_Style).Build);
       Set_Part_Style (+Tracks, Custom_Part, Style.Base
@@ -758,12 +766,41 @@ begin
         ((Background_Color => Set_Bg (RGB (176, 119, 37)), others => <>)).Build);
       Add_Child (+Track_Scroll, +Tracks);
       declare
-         Sections : constant Box_Array := [Menu_Row, Toolbar, Workspace, Timeline_Tools, Placement_Row, Track_Scroll];
+         Sections : constant Box_Array := [Timeline_Tools, Placement_Row, Track_Scroll];
       begin
          for H of Sections loop
-            Add_Child (+Root, +H);
+            Add_Child (+Lower, +H);
          end loop;
       end;
+      Add_Child (+Main_Split, +Workspace);
+      Add_Child (+Main_Split, +Lower);
+      declare
+         V : Editor_Split.Views.Ref := Editor_Split.Views.Borrow (Workspace);
+         M : Editor_Split.Views.Ref := Editor_Split.Views.Borrow (Main_Split);
+      begin
+         V.First := +Bin;
+         V.Second := +Monitor;
+         V.Fraction := 0.31;
+         V.Minimum_First := 240.0;
+         V.Minimum_Second := 300.0;
+         M.First := +Workspace;
+         M.Second := +Lower;
+         M.Vertical := True;
+         M.Fraction := 0.56;
+         M.Minimum_First := 180.0;
+         M.Minimum_Second := 220.0;
+      end;
+      Set_Part_Style (+Main_Split, Main_Part, Style.Base
+        ((Flex_Grow => Set (1.0), Height => Set (Size (Px (0.0))), others => <>)).Build);
+      Set_Flag (+Workspace, Clickable, True);
+      Set_Flag (+Main_Split, Clickable, True);
+      Set_Part_Style (+Workspace, Indicator_Part, Style.Base
+        ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
+      Set_Part_Style (+Main_Split, Indicator_Part, Style.Base
+        ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
+      Add_Child (+Root, +Menu_Row);
+      Add_Child (+Root, +Toolbar);
+      Add_Child (+Root, +Main_Split);
       Status := Make_Label (+Root, "Ready. Import files and add a track, or open a .fw project.");
 
       Form := Dialogs.Create_Handle;
