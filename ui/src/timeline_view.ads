@@ -3,6 +3,7 @@
 with Ada.Strings.Unbounded;
 with Adi.Core;
 with Adi.SDL.Mouse;
+with Adi.SDL.Events;
 with Adi.Widget;
 with Adi.Widget.Extension;
 with Framewise.Session;
@@ -27,6 +28,7 @@ package Timeline_View is
       Selected_Clip : Ada.Strings.Unbounded.Unbounded_String;
       Selection_Changed : Command_Callback := null;
 
+      Drag_Modifiers  : Adi.SDL.Events.SDL_Keymod := 0;
       Drag_Active     : Boolean := False;
       Drag_Name       : Ada.Strings.Unbounded.Unbounded_String;
       Drag_Start_X    : Adi.Core.Pixel_Type := 0.0;
@@ -62,6 +64,14 @@ package Timeline_View is
      (W      : in out Track_Widget;
       X, Y   : Adi.Core.Pixel_Type;
       Button : Adi.Core.Mouse_Button);
+
+   overriding procedure On_Key_Down
+     (W : in out Track_Widget; Scancode : Adi.SDL.Events.SDL_Scancode;
+      Key_Mod : Adi.SDL.Events.SDL_Keymod; Repeat : Boolean);
+
+   overriding procedure On_Key_Up
+     (W : in out Track_Widget; Scancode : Adi.SDL.Events.SDL_Scancode;
+      Key_Mod : Adi.SDL.Events.SDL_Keymod; Repeat : Boolean);
 
    package Views is new Adi.Widget.Extension (Track_Widget);
 end Timeline_View;

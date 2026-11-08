@@ -33,6 +33,14 @@ When tracks exceed the timeline viewport, a vertical scrollbar appears on
 its right edge. Drag the thumb, click the scrollbar track or use the wheel
 to reach tracks below the viewport. It hides when all tracks fit.
 
+Hold **Shift** while dragging a clip body to snap either edge to a neighboring
+clip on the same track when it is within 10 screen pixels. Hold **Control** to
+snap the clip's start to the nearest 0.5-second interval; halfway values round
+forward. With both held, a nearby valid clip edge takes priority, otherwise the
+half-second grid applies. Modifier changes update the preview even without
+moving the pointer. Release commits one move command; overlap validation still
+applies. Trim handles keep their existing behavior.
+
 ## Optional console
 
 Click **Console** in the upper-right corner to open **Framewise Console** above

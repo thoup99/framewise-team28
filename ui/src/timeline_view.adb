@@ -9,6 +9,107 @@ package body Timeline_View is
    Gutter : constant Pixel_Type := 110.0;
    Ruler_Height : constant Pixel_Type := 30.0;
 
+   use type Adi.SDL.Events.SDL_Keymod;
+   Snap_Distance : constant Long_Float := 10.0;  --  Screen pixels, independent of zoom.
+
+   procedure Update_Drag_Modifiers
+     (W : in out Track_Widget; Modifiers : Adi.SDL.Events.SDL_Keymod)
+   is
+   begin
+      if W.Drag_Modifiers /= Modifiers then
+         W.Drag_Modifiers := Modifiers;
+         if W.Drag_Active then
+            Mark_Dirty (W);
+         end if;
+      end if;
+   end Update_Drag_Modifiers;
+
+   --  Preview and release share the same target calculation. Shift aligns
+   --  either edge to a valid neighbor on this track; Control rounds the start.
+   function Drag_Position (W : Track_Widget; X : Pixel_Type) return Long_Float is
+      Raw : constant Long_Float := Long_Float'Max
+        (0.0, W.Drag_Start_Time + Long_Float (X - W.Drag_Start_X) / W.Zoom);
+      Shift : constant Boolean := (W.Drag_Modifiers and Adi.SDL.Events.SDL_KMOD_SHIFT) /= 0;
+      Control : constant Boolean := (W.Drag_Modifiers and Adi.SDL.Events.SDL_KMOD_CTRL) /= 0;
+   begin
+      if Shift and then W.Read_Sequence /= null then
+         declare
+            Seq : constant Framewise.Session.Sequence_View := W.Read_Sequence.all;
+         begin
+            for Track of Seq.Tracks loop
+               if Track.Used then
+                  declare
+                     Found : Boolean := False;
+                     Duration : Framewise.Time := 0;
+                     Snapped : Boolean := False;
+                     Best : Framewise.Time := 0;
+                     Best_Distance : Long_Float := Snap_Distance;
+
+                     procedure Consider (Target : Framewise.Time) is
+                        Distance : constant Long_Float := abs (Framewise.Seconds (Target) - Raw) * W.Zoom;
+                     begin
+                        if Distance > Snap_Distance or else
+                          (Snapped and then Distance >= Best_Distance) or else
+                          Target > Framewise.Time'Last - Duration
+                        then
+                           return;
+                        end if;
+                        --  Do not attract a clip into another clip in a crowded gap.
+                        --  Use ticks here so touching edges are compared exactly.
+                        for I in 1 .. Track.Count loop
+                           declare
+                              Other renames Track.Clips (I);
+                           begin
+                              if Framewise.Image (Other.N) /= To_String (W.Drag_Name) and then
+                                Target < Other.Start + (Other.Src_Out - Other.Src_In) and then
+                                Other.Start < Target + Duration
+                              then
+                                 return;
+                              end if;
+                           end;
+                        end loop;
+                        Snapped := True;
+                        Best := Target;
+                        Best_Distance := Distance;
+                     end Consider;
+                  begin
+                     for I in 1 .. Track.Count loop
+                        if Framewise.Image (Track.Clips (I).N) = To_String (W.Drag_Name) then
+                           Found := True;
+                           Duration := Track.Clips (I).Src_Out - Track.Clips (I).Src_In;
+                           exit;
+                        end if;
+                     end loop;
+                     if Found then
+                        for I in 1 .. Track.Count loop
+                           declare
+                              Other renames Track.Clips (I);
+                           begin
+                              if Framewise.Image (Other.N) /= To_String (W.Drag_Name) then
+                                 Consider (Other.Start + (Other.Src_Out - Other.Src_In));
+                                 if Other.Start >= Duration then
+                                    Consider (Other.Start - Duration);
+                                 end if;
+                              end if;
+                           end;
+                        end loop;
+                        if Snapped then
+                           return Framewise.Seconds (Best);
+                        end if;
+                        exit;
+                     end if;
+                  end;
+               end if;
+            end loop;
+         end;
+      end if;
+      if Control then
+         --  Exact half-second intervals; ties round toward the later interval.
+         return Long_Float'Floor (Raw * 2.0 + 0.5) / 2.0;
+      end if;
+      return Raw;
+   end Drag_Position;
+
    procedure Set_Razor_Pointer (W : in out Track_Widget;
       X, Y : Pixel_Type; Active : Boolean) is
       Show : constant Boolean := Active and then W.Razor_Mode;
@@ -243,9 +344,7 @@ package body Timeline_View is
                               W.Drag_Src_Out + Delta_Seconds;
 
                         else
-                           Preview_Start :=
-                              Long_Float'Max
-                                 (0.0, W.Drag_Start_Time + Delta_Seconds);
+                           Preview_Start := Drag_Position (W, W.Drag_Current_X);
                         end if;
 
                         if Preview_In >= 0.0
@@ -329,6 +428,7 @@ package body Timeline_View is
       W.Drag_Active := False;
       W.Drag_Trim_Left := False;
       W.Drag_Trim_Right := False;
+      Update_Drag_Modifiers (W, Adi.SDL.Events.SDL_GetModState);
       if W.Read_Sequence = null or else W.Zoom <= 0.0 or else X < Left or else X > Right then
          return;
       end if;
@@ -474,6 +574,7 @@ package body Timeline_View is
       if W.Scrubbing then
          Scrub_To (W, X);
       elsif W.Drag_Active then
+         Update_Drag_Modifiers (W, Adi.SDL.Events.SDL_GetModState);
          W.Drag_Current_X := X;
          Mark_Dirty (W);
       end if;
@@ -496,6 +597,7 @@ package body Timeline_View is
          return;
       end if;
       
+      Update_Drag_Modifiers (W, Adi.SDL.Events.SDL_GetModState);
       W.Drag_Current_X := X;
       W.Drag_Active := False;
       Mark_Dirty(W);
@@ -555,9 +657,7 @@ package body Timeline_View is
                  (New_Time * Long_Float (Framewise.Timebase))));
       else
          --  Dragging the body still moves the entire clip.
-         New_Time := Long_Float'Max
-           (0.0, W.Drag_Start_Time +
-            Long_Float (X - W.Drag_Start_X) / W.Zoom);
+         New_Time := Drag_Position (W, X);
 
          if New_Time >
            Long_Float (Framewise.Time'Last / 2) /
@@ -574,5 +674,23 @@ package body Timeline_View is
       end if;
 
    end On_Mouse_Up;
+
+   overriding procedure On_Key_Down
+     (W : in out Track_Widget; Scancode : Adi.SDL.Events.SDL_Scancode;
+      Key_Mod : Adi.SDL.Events.SDL_Keymod; Repeat : Boolean)
+   is
+      pragma Unreferenced (Scancode, Repeat);
+   begin
+      Update_Drag_Modifiers (W, Key_Mod);
+   end On_Key_Down;
+
+   overriding procedure On_Key_Up
+     (W : in out Track_Widget; Scancode : Adi.SDL.Events.SDL_Scancode;
+      Key_Mod : Adi.SDL.Events.SDL_Keymod; Repeat : Boolean)
+   is
+      pragma Unreferenced (Scancode, Repeat);
+   begin
+      Update_Drag_Modifiers (W, Key_Mod);
+   end On_Key_Up;
 
 end Timeline_View;
