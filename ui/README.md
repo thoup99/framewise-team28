@@ -150,13 +150,12 @@ routed divider dragging and routed scrollbar thumb/track interaction.
 It verifies the exported video with ffprobe and compares GUI and CLI saved
 `.fw` documents byte for byte. Test files live in a disposable temporary folder.
 
-The production UI is still monolithic. The runner builds a **test-only copy**
-of its entry point, substituting `regression_scenarios.inc` for `A.Run` after
-all normal widgets and callbacks have been constructed. It does not modify
-production sources or add test controls to the editor. This small adapter
-fails explicitly if the entry-point anchors change; when the UI is split into
-packages, replace the adapter with imports of those packages and retain the
-behavioral scenarios as the before/after baseline. No pixel screenshots are
+The runner imports the production editor packages and calls
+`Editor_Application.Initialize` before running `regression_scenarios.inc`,
+then calls `Shutdown`. It exercises the same widgets and handlers as the app
+without entering the interactive event loop or copying production source.
+The behavioral scenarios remain the baseline established before the refactor.
+No pixel screenshots are
 required; layout checks assert relationships such as equal widths and centered
 controls. File-picker result callbacks are tested; interaction with OS-native
 file-picker windows and appearance on Windows/HiDPI remain manual checks.
@@ -165,3 +164,25 @@ CI imports the GUI job from main and runs the two widget suites plus this
 workflow suite using SDL's dummy video driver and software rendering. The
 library, CLI, export and proof jobs remain intact. On failure, CI uploads the
 workflow log and generated regression driver to help locate the failed check.
+
+## UI source organization
+
+`src/framewise_ui.adb` is the executable entry point. The editor is organized by responsibility:
+
+| Package | Responsibility |
+| --- | --- |
+| `Editor_Application` | Window startup, event loop, and cleanup |
+| `Editor_Context` | Single backend session, widget handles, and shared UI state |
+| `Editor_Controller` | Session commands, document lifecycle, and editor callbacks |
+| `Editor_Dialogs` | Form construction, input validation, and import results |
+| `Editor_Layout` | Project files, preview, timeline controls, menus, and panel arrangement |
+| `Editor_Styles` | Shared text, panel, button, and dropdown styles |
+| `Editor_Widgets` | Common widget creation and callback wiring |
+| `Editor_Cursors` | Pointer selection and native cursor resource cleanup |
+| `Timeline_View` | Timeline drawing, selection, dragging, trimming, and Razor interaction |
+| `Editor_Split` | Resizable panel layout and divider interaction |
+
+The UI still submits document changes through `Framewise.Session.Execute`.
+Shared context holds handles and transient editor state; the session remains
+the source of truth for the project. Dialogs and the controller call each other
+through their package interfaces, while layout only builds and connects widgets.

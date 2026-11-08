@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""Build a test-only adapter around the current monolithic editor.
-
-The checked-in Ada scenarios exercise the real handlers/widgets. Only the app
-entry point and event-loop call are replaced; production sources are untouched.
-When the UI is split into packages, replace this adapter with package imports,
-keeping the behavioral scenarios as the refactoring baseline.
-"""
+"""Build a regression driver using the real editor packages and scenarios."""
 import argparse
 import json
 import os
@@ -19,15 +13,45 @@ REPO = UI.parent
 
 def generate(destination):
     destination.mkdir(parents=True, exist_ok=True)
-    source = (UI / 'src/framewise_ui.adb').read_text()
-    for anchor in ('procedure Framewise_UI is', 'end Framewise_UI;', '      A.Run;'):
-        if source.count(anchor) != 1:
-            raise RuntimeError(f'UI test adapter needs updating: expected one {anchor!r}')
-    source = source.replace('procedure Framewise_UI is', 'procedure Framewise_UI_Regression is')
-    source = source.replace('end Framewise_UI;', 'end Framewise_UI_Regression;')
-    source = source.replace('with Ada.Characters.Latin_1;',
-                            'with Ada.Characters.Latin_1;\nwith Ada.Text_IO;\nwith Ada.Environment_Variables;')
-    source = source.replace('      A.Run;', (UI / 'tests/regression_scenarios.inc').read_text())
+    source = """with Adi.Core; use Adi.Core;
+with Adi.CSS_Styles; use Adi.CSS_Styles;
+with Adi.Widget; use Adi.Widget;
+with Adi.Widget_Styles; use Adi.Widget_Styles;
+with Adi.Window; use Adi.Window;
+with Framewise;
+with Timeline_View;
+with Editor_Split;
+with Adi.Widget.Text_Editor;
+with Adi.SDL.Events;
+with Editor_Context; use Editor_Context;
+with Adi.OS;
+with Adi.SDL.Video;
+with Interfaces.C.Strings;
+with Ada.Strings.Fixed;
+with Ada.Directories;
+with Ada.Text_IO;
+with Ada.Environment_Variables;
+with Editor_Styles; use Editor_Styles;
+with Editor_Controller; use Editor_Controller;
+with Editor_Dialogs; use Editor_Dialogs;
+with Editor_Application;
+
+procedure Framewise_UI_Regression is
+   use type Buttons.Button_Handle;
+   use type Labels.Label_Handle;
+   use type Inputs.Text_Input_Handle;
+   use type Combos.Combo_Box_Handle;
+   use type Adi.Widget.Text_Editor.Text_Editor_Handle;
+   use type Timeline_View.Views.Handle;
+   use type Editor_Split.Views.Handle;
+   use type US.Unbounded_String;
+   use type Framewise.Time;
+   use type Boxes.Box_Handle;
+begin
+   Editor_Application.Initialize;
+"""
+    source += (UI / 'tests/regression_scenarios.inc').read_text()
+    source += '   Editor_Application.Shutdown;\nend Framewise_UI_Regression;\n'
     driver = destination / 'framewise_ui_regression.adb'
     if not driver.exists() or driver.read_text() != source:
         # GNAT timestamps have one-second resolution. Avoid stale code if
