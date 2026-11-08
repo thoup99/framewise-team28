@@ -230,8 +230,9 @@ procedure Framewise_UI is
          Show_Preview (Timeline_View.Preview_Text (Seq, V.Playhead));
       end;
       Set_Part_Style (+Tracks, Main_Part, Style.Base
-        ((Height => Set (Size (Px (Float (Natural'Max (Rows, 4) * 48 + 36)))),
-          Flex_Shrink => Set (0.0), Background_Color => Set_Bg (RGB (29, 38, 51)), others => <>)).Build);
+        ((Height => Set (Size (Px (Float (Natural'Max (Rows, 1) * 48 + 36)))),
+          Flex_Grow => Set (1.0), Flex_Shrink => Set (0.0),
+          Background_Color => Set_Bg (RGB (29, 38, 51)), others => <>)).Build);
       Update_Title;
       Mark_Dirty (+Tracks);
    end Refresh_Timeline;
@@ -325,7 +326,14 @@ procedure Framewise_UI is
             Execute_Line ("import " & US.To_String (Form_Target) & " " & Field (1) &
               " " & Field (2) & " " & Combos.Get_Selected_Text (Kind_Choice));
          when Add_Track =>
-            Execute_Line ("track " & US.To_String (Form_Target) & " " & Combos.Get_Selected_Text (Kind_Choice));
+            if Field (1)'Length not in 1 .. Framewise.Max_Name or else
+              (for some C of Field (1) => C not in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_')
+            then
+               Dialogs.Set_Title (Form,
+                 "Track name: use 1-32 letters, numbers, or underscores");
+               return;
+            end if;
+            Execute_Line ("track " & Field (1) & " " & Combos.Get_Selected_Text (Kind_Choice));
          when Place_Clip =>
             Execute_Line ("place " & US.To_String (Form_Target) & " " &
               Combos.Get_Selected_Text (Track_Choice) & " " & Combos.Get_Selected_Text (Source_Choice) &
@@ -538,7 +546,8 @@ procedure Framewise_UI is
          Delete_Selected;
       elsif Button = Widget_Handle'(+Add_Track_Button) then
          Form_Target := US.To_Unbounded_String (Unique_Name ("track"));
-         Prepare_Form (Add_Track, "Add Track - choose media type");
+         Prepare_Form (Add_Track, "Add Track - name and media type");
+         Set_Field (1, "Track name (letters, numbers, underscores)", US.To_String (Form_Target));
          Dialogs.Show (Form);
       elsif Button = Widget_Handle'(+Place_Button) then
          if Combos.Get_Selected_Index (Source_Choice) = 0 or else Combos.Get_Selected_Index (Track_Choice) = 0 then
@@ -877,6 +886,16 @@ begin
       Set_Part_Style (+Track_Scroll, Main_Part, Style.Base
         ((Flex_Grow => Set (1.0), Min_Height => Set (Size (Px (80.0))),
           Overflow_Y => Set (Overflow_Auto), others => <>)).Build);
+      Set_Flag (+Track_Scroll, Scrollable, True);
+      Set_Part_Style (+Track_Scroll, Scroll_Part, Style.Base
+        ((Width => Set (Size (Px (14.0))),
+          Background_Color => Set_Bg (RGB (22, 29, 40)), others => <>)).Build);
+      Set_Part_Style (+Track_Scroll, Knob_Part, Style.Base
+        ((Width => Set (Size (Px (10.0))), Min_Height => Set (Size (Px (24.0))),
+          Background_Color => Set_Bg (RGB (115, 135, 160)),
+          Border_Radius => Set (Radius (Px (5.0))), others => <>))
+        .On_Hover ((Background_Color => Set_Bg (RGB (145, 170, 200)), others => <>))
+        .On_Press ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
       Set_Part_Style (+Tracks, Label_Part, Style.Base (Text_Style).Build);
       Set_Part_Style (+Tracks, Cursor_Part, Style.Base
         ((Background_Color => Set_Bg (RGB (255, 225, 130)), others => <>)).Build);

@@ -25,6 +25,10 @@ blue and also filters the Selected media dropdown. Combined video/audio
 sources appear in both Video and Audio. Filtering changes only the view;
 it does not remove sources or edit the project.
 
+When tracks exceed the timeline viewport, a vertical scrollbar appears on
+its right edge. Drag the thumb, click the scrollbar track or use the wheel
+to reach tracks below the viewport. It hides when all tracks fit.
+
 ## Current workflow
 
 1. Use **File > Open Project** to open an existing `.fw` document, or
@@ -33,7 +37,9 @@ it does not remove sources or edit the project.
    seconds and choose `video`, `audio`, or `both`. Duration is still manual
    at this stage of the semester plan. Imported files appear in Project
    Files and the Selected media dropdown.
-3. Use **Add Track** to create a video, audio or combined track. Choose it
+3. Use **Add Track** to enter a track name and choose video, audio or combined
+   media. Names use up to 32 letters, numbers or underscores; a generated
+   name is supplied as a starting point. Choose it
    in Target track, select media, then click **Add Selected Media to Track**.
    The dialog defaults to the entire source at the current playhead time;
    change source in/out and timeline start as needed. The engine validates
