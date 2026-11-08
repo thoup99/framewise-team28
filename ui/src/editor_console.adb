@@ -26,7 +26,9 @@ package body Editor_Console is
 
    procedure Record_Command (Line, Response : String; Origin : Command_Origin) is
    begin
-      if not Is_Open then
+      --  Editor actions happen while this modal console is closed. Retain
+      --  their results so opening it later shows the complete session log.
+      if not Text_Editors.Is_Valid (Console_Output) then
          return;
       end if;
       Text_Editors.Append_Text (Console_Output,

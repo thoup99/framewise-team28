@@ -49,8 +49,11 @@ track selector; `list` inspects the current project and `undo` undoes its latest
 edit. Command entries retain their origin labels: `[Editor]` for editor
 operations and `[Console]` for typed commands. Typed commands appear once;
 selection, filters, zooming, scrolling, and resizing are not logged.
-Closing the console stops collection but retains its transcript and unfinished
-input. Incoming editor output does not change input focus or the caret position.
+Editor operations are recorded even while the console is closed, including
+opening a project and deleting clips. Open the console after editing to inspect
+the commands and their results. Closing it retains the transcript and unfinished
+input for the current application session. Recording does not open the console
+or change input focus or the caret position.
 
 Successful `save path.fw` and `load path.fw` commands also update the
 current document path, window title, and unsaved-change state. Console commands

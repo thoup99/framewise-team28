@@ -331,6 +331,9 @@
             Render (W);
             Check (Dialogs.Is_Shown (Console_Dialog), "Console button opens centered dialog");
             Check (Overlay_Count (W) = 1, "Console must block editor interaction");
+            Check (Ada.Strings.Fixed.Index
+              (Adi.Widget.Text_Editor.Get_Text (Console_Output), "[Editor] load examples/cut.fw") > 0,
+              "Project opens before first console use must be recorded");
             Check (Get_Focus_Handle (W) = Widget_Handle'(+Console_Input), "Console opens ready to type");
             for I in 1 .. Item_Count (+Console_Input) loop
                declare
@@ -472,13 +475,60 @@
             Before := US.To_Unbounded_String (Adi.Widget.Text_Editor.Get_Text (Console_Output));
             Render (W);
             Click_Control (+Console_Close_Button);
-            Execute_Line ("track HiddenEdit audio");
-            Check (Reply.Ok, "Editor continues working after console closes");
+            Stage ("project opens and clip deletion remain logged with console closed");
+            Open_Selected (Files ("examples/cut.fw"));
+            Check (Reply.Ok and then not Dialogs.Is_Shown (Console_Dialog),
+                   "Open Project callback works while console stays closed");
             Render (W);
+            declare
+               G : constant Rectangle := Geometry_In_Window (+Tracks);
+               V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+               Step : constant Pixel_Type := Pixel_Type (V.Zoom);
+            begin
+               Adi.Window.On_Mouse_Down (W, G.X + 110.0 + 2.0 * Step, G.Y + 50.0, Left_Button);
+               Adi.Window.On_Mouse_Up (W, G.X + 110.0 + 2.0 * Step, G.Y + 50.0, Left_Button);
+               Check (US.To_String (V.Selected_Clip) = "c1", "Select first clip through editor");
+               Click_Control (+Delete_Button);
+               Check (Reply.Ok and then Natural (FS.Sequence_Of (Editor).Tracks (1).Count) = 2,
+                      "Delete Clip button removes the selected clip");
+               Check (Ada.Strings.Fixed.Index
+                 (Adi.Widget.Text_Editor.Get_Text (Console_Output), "[Editor] delete c1" &
+                  Ada.Characters.Latin_1.LF & FS.Image (Reply)) > 0,
+                 "Closed-console log includes deletion and result");
+               Render (W);
+               Adi.Window.On_Mouse_Down (W, G.X + 110.0 + 10.0 * Step, G.Y + 50.0, Left_Button);
+               Adi.Window.On_Mouse_Up (W, G.X + 110.0 + 10.0 * Step, G.Y + 50.0, Left_Button);
+               Check (US.To_String (V.Selected_Clip) = "c2", "Select second clip through editor");
+               Adi.Window.On_Key_Down (W, Adi.SDL.Events.SDL_SCANCODE_DELETE, 0, 0, False);
+               Check (Reply.Ok and then Natural (FS.Sequence_Of (Editor).Tracks (1).Count) = 1,
+                      "Delete key removes the selected clip");
+            end;
+            Check (not Dialogs.Is_Shown (Console_Dialog) and then
+              Get_Focus_Handle (W) = Widget_Handle'(+Tracks),
+              "Background recording must not open console or steal editor focus");
+            declare
+               Recorded : constant String := Adi.Widget.Text_Editor.Get_Text (Console_Output);
+            begin
+               Check (Ada.Strings.Fixed.Count (Recorded, "[Editor] load examples/cut.fw") =
+                 Ada.Strings.Fixed.Count (US.To_String (Before), "[Editor] load examples/cut.fw") + 1,
+                 "Open Project recorded exactly once");
+               Check (Ada.Strings.Fixed.Count (Recorded, "[Editor] delete c1") =
+                 Ada.Strings.Fixed.Count (US.To_String (Before), "[Editor] delete c1") + 1,
+                 "Button deletion recorded exactly once");
+               Check (Ada.Strings.Fixed.Count (Recorded, "[Editor] delete c2") =
+                 Ada.Strings.Fixed.Count (US.To_String (Before), "[Editor] delete c2") + 1,
+                 "Keyboard deletion recorded exactly once");
+               Before := US.To_Unbounded_String (Recorded);
+            end;
+            Render (W);
+            Click_Control (+Zoom_In);
+            Click_Control (+Filter_Buttons (Video_Media));
+            Check (US.To_Unbounded_String (Adi.Widget.Text_Editor.Get_Text (Console_Output)) = Before,
+                   "Navigation and filters remain excluded while console is closed");
             Click_Control (+Console_Button);
             Render (W);
             Check (US.To_Unbounded_String (Adi.Widget.Text_Editor.Get_Text (Console_Output)) = Before,
-                   "Closed console must not collect editor commands");
+                   "Reopening console displays recorded actions without duplication");
             Check (Inputs.Get_Text (Console_Input) = "draft", "Reopening preserves draft input");
             Inputs.Set_Text (Console_Input, "");
             Before := US.To_Unbounded_String (Adi.Widget.Text_Editor.Get_Text (Console_Output));
