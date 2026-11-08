@@ -19,6 +19,12 @@ on clips in razor mode. Buttons and dropdowns use a hand; editable fields use
 a text cursor. Drag cursors remain active until release. Native cursors are
 cached and released when the editor closes.
 
+Project Files has **All**, **Video**, and **Audio** filters. All is selected
+initially and when starting or opening a project. The active filter is lit
+blue and also filters the Selected media dropdown. Combined video/audio
+sources appear in both Video and Audio. Filtering changes only the view;
+it does not remove sources or edit the project.
+
 ## Current workflow
 
 1. Use **File > Open Project** to open an existing `.fw` document, or

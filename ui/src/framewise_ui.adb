@@ -79,6 +79,24 @@ procedure Framewise_UI is
    File_Button, Add_Track_Button, Place_Button, Undo_Button,
      Delete_Button, Razor_Button, Move_Button,
      Zoom_In, Zoom_Out, Scroll_Left, Scroll_Right, Start_Button : Buttons.Button_Handle;
+   type Media_Filter is (All_Media, Video_Media, Audio_Media);
+   type Filter_Button_Array is array (Media_Filter) of Buttons.Button_Handle;
+   Filter_Buttons : Filter_Button_Array;
+   Current_Filter : Media_Filter := All_Media;
+
+   function Matches_Filter (Kind : FS.Media_Kind) return Boolean is
+     (case Current_Filter is
+         when All_Media => True,
+         when Video_Media => Kind'Image in "VIDEO" | "BOTH",
+         when Audio_Media => Kind'Image in "AUDIO" | "BOTH");
+
+   procedure Update_Filter_Buttons is
+   begin
+      for F in Media_Filter loop
+         Set_Selected (+Filter_Buttons (F), F = Current_Filter);
+      end loop;
+   end Update_Filter_Buttons;
+
    type Form_Mode is (Import_Media, Add_Track, Place_Clip, Move_Clip, Project_Settings);
    Mode : Form_Mode := Import_Media;
    type Pending_Action is (Nothing, New_Project, Open_Project, Close_Editor);
@@ -174,7 +192,7 @@ procedure Framewise_UI is
       Combos.Clear_Items (Source_Choice);
       Combos.Clear_Items (Track_Choice);
       for Source of Seq.Sources loop
-         if Source.Used then
+         if Source.Used and then Matches_Filter (Source.Kind) then
             Combos.Add_Item (Source_Choice, Framewise.Image (Source.N));
             if Framewise.Image (Source.N) = Old_Source then
                Combos.Set_Selected_Index (Source_Choice, Combos.Option_Count (Source_Choice));
@@ -200,7 +218,11 @@ procedure Framewise_UI is
          Combos.Set_Selected_Index (Track_Choice, Natural'Min (1, Combos.Option_Count (Track_Choice)));
       end if;
       Adi.Widget.Text_Editor.Set_Text (Sources,
-        (if US.Length (Text) = 0 then "No project files. Use Import Files to add media."
+        (if US.Length (Text) = 0 then
+           (case Current_Filter is
+               when All_Media => "No project files. Use Import Files to add media.",
+               when Video_Media => "No video files in this project.",
+               when Audio_Media => "No audio files in this project.")
          else US.To_String (Text)));
       declare
          V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
@@ -376,6 +398,8 @@ procedure Framewise_UI is
    procedure Reset_View is
       V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
    begin
+      Current_Filter := All_Media;
+      Update_Filter_Buttons;
       V.Selected_Clip := US.Null_Unbounded_String;
       V.Playhead := 0;
       V.First_Second := 0.0;
@@ -494,6 +518,14 @@ procedure Framewise_UI is
 
    procedure Clicked (Button : Widget_Handle) is
    begin
+      for F in Media_Filter loop
+         if Button = Widget_Handle'(+Filter_Buttons (F)) then
+            Current_Filter := F;
+            Update_Filter_Buttons;
+            Refresh_Timeline;
+            return;
+         end if;
+      end loop;
       if Button = Widget_Handle'(+File_Button) then
          declare
             G : constant Rectangle := Get_Geometry (Button);
@@ -655,7 +687,7 @@ begin
    A.Set_Target_FPS (60);
    W := Create_Window_Handle ("Framewise", Adi.Window.Extent (Px (1280.0), Px (850.0)));
    declare
-      Root, Menu_Row, Bin, Monitor, Lower, Timeline_Tools,
+      Root, Menu_Row, Filter_Row, Bin, Monitor, Lower, Timeline_Tools,
         Placement_Row, Track_Scroll : Boxes.Box_Handle;
       Workspace, Main_Split : Editor_Split.Views.Handle;
       package Mouse renames Adi.SDL.Mouse;
@@ -707,7 +739,9 @@ begin
          end;
          if Kind = Mouse.SDL_SYSTEM_CURSOR_DEFAULT then
             declare
-               Controls : constant Handles := [+File_Button, +Add_Track_Button, +Place_Button,
+               Controls : constant Handles := [+Filter_Buttons (All_Media),
+                 +Filter_Buttons (Video_Media), +Filter_Buttons (Audio_Media),
+                 +File_Button, +Add_Track_Button, +Place_Button,
                  +Undo_Button, +Delete_Button, +Razor_Button, +Move_Button,
                  +Zoom_In, +Zoom_Out, +Scroll_Left, +Scroll_Right, +Start_Button,
                  +Source_Choice, +Track_Choice, +Kind_Choice,
@@ -744,6 +778,7 @@ begin
    begin
       Root := Boxes.Create_Handle;
       Menu_Row := Boxes.Create_Handle;
+      Filter_Row := Boxes.Create_Handle;
       Lower := Boxes.Create_Handle;
       Bin := Boxes.Create_Handle;
       Monitor := Boxes.Create_Handle;
@@ -756,7 +791,7 @@ begin
         ((Panel_Style with delta Overflow_Y => Set (Overflow_Auto))).Build);
       Set_Part_Style (+Root, Main_Part, Style.Base (Panel_Style).Build);
       declare
-         Rows : constant Box_Array := [Menu_Row, Timeline_Tools, Placement_Row];
+         Rows : constant Box_Array := [Menu_Row, Filter_Row, Timeline_Tools, Placement_Row];
       begin
          for H of Rows loop
             Set_Part_Style (+H, Main_Part, Style.Base
@@ -771,6 +806,18 @@ begin
         ((Panel_Style with delta Flex_Grow => Set (1.0), Overflow_Y => Set (Overflow_Auto))).Build);
       File_Button := Make_Button (+Menu_Row, "File");
       Add_Label (+Bin, "Project Files");
+      Add_Child (+Bin, +Filter_Row);
+      Filter_Buttons (All_Media) := Make_Button (+Filter_Row, "All");
+      Filter_Buttons (Video_Media) := Make_Button (+Filter_Row, "Video");
+      Filter_Buttons (Audio_Media) := Make_Button (+Filter_Row, "Audio");
+      for H of Filter_Buttons loop
+         Set_Part_Style (+H, Main_Part, Style.Base
+           ((Background_Color => Set_Bg (RGB (38, 50, 67)),
+             Padding => Set (CSS_Box (Px (7.0), Px (10.0))),
+             Border_Radius => Set (Radius (Px (3.0))), others => <>))
+           .On_Selected ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
+      end loop;
+      Update_Filter_Buttons;
       Sources := Adi.Widget.Text_Editor.Create_Handle ("");
       Adi.Widget.Text_Editor.Set_Read_Only (Sources);
       Set_Part_Style (+Sources, Main_Part, Style.Base
