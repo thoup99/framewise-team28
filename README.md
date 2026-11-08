@@ -15,7 +15,27 @@ sudo apt install libavformat-dev libavcodec-dev libavutil-dev libswscale-dev lib
 ```
 
 ### Windows
-TODO
+Install Alire, the shared FFmpeg build in `C:\ffmpeg`, and the MinGW64
+SDL3, SDL3_ttf, and SDL3_image packages in `C:\msys64\mingw64`.
+The Alire manifests supply their DLL and library paths on Windows.
+
+From the repository root, start the UI in PowerShell:
+
+```powershell
+cd ui
+alr run
+```
+
+To export the bundled sample, run these from the same `ui` directory:
+
+```powershell
+alr build
+alr exec -- cmd /d /c "cd ..\examples && ..\ui\bin\framewise_ui.exe"
+```
+
+Enter `load cut.fw`, then click **Export out.mp4**. The output is
+`examples\out.mp4`. Launching through Alire applies the project environment
+to the executable and to FFmpeg.
 
 ## What it is
 

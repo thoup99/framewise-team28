@@ -19,3 +19,7 @@ framewise = { path = ".." }
 [[pins]]
 bedrock = { url = "https://github.com/GNAT-Academic-Program/bedrock.git" }
 adi2 = { url = "https://github.com/ovenpasta/adi2.git", commit = "a6886c9caa1549c1af701bf300c6bfd57e111646" }
+
+[environment.'case(os)'.windows]
+PATH.prepend = "C:/msys64/mingw64/bin"
+LIBRARY_PATH.prepend = "C:/msys64/mingw64/lib"
