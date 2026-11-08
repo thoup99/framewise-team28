@@ -9,6 +9,20 @@ package body Timeline_View is
    Gutter : constant Pixel_Type := 110.0;
    Ruler_Height : constant Pixel_Type := 30.0;
 
+   procedure Set_Razor_Pointer (W : in out Track_Widget;
+      X, Y : Pixel_Type; Active : Boolean) is
+      Show : constant Boolean := Active and then W.Razor_Mode;
+   begin
+      if W.Razor_Hover /= Show or else
+        (Show and then (W.Razor_X /= X or else W.Razor_Y /= Y))
+      then
+         W.Razor_Hover := Show;
+         W.Razor_X := X;
+         W.Razor_Y := Y;
+         Mark_Dirty (W);
+      end if;
+   end Set_Razor_Pointer;
+
    function Cursor_At (W : Track_Widget; X, Y : Pixel_Type)
       return Adi.SDL.Mouse.SDL_SystemCursor
    is
@@ -172,6 +186,33 @@ package body Timeline_View is
                                  24.0),
                                  Framewise.Image (C.N));                     
                      end if;
+                  --  Use the same timeline-to-ticks mapping as the click
+                  --  handler; only show cuts strictly inside the clip.
+                  if W.Razor_Mode and then W.Razor_Hover and then
+                    W.Razor_Y >= Y + 4.0 and then W.Razor_Y <= Y + 40.0
+                    and then W.Razor_X >= Visible_Left
+                    and then W.Razor_X < Visible_Right and then W.Zoom > 0.0
+                  then
+                     declare
+                        Seconds : constant Long_Float := W.First_Second +
+                          Long_Float (W.Razor_X - Left) / W.Zoom;
+                     begin
+                        if Seconds >= 0.0 and then Seconds <
+                          Framewise.Seconds (Framewise.Time'Last / 2)
+                        then
+                           declare
+                              Cut : constant Framewise.Time := Framewise.Time
+                                (Seconds * Long_Float (Framewise.Timebase));
+                           begin
+                              if Cut > C.Start and then Cut - C.Start < C.Src_Out - C.Src_In then
+                                 Add_Item (W, Make_Panel (Cursor_Part,
+                                   (W.Razor_X, Y + 4.0,
+                                    Pixel_Type'Min (2.0, Visible_Right - W.Razor_X), 36.0), 5));
+                              end if;
+                           end;
+                        end if;
+                     end;
+                  end if;
                   -- Show a temporary ghost while moving or trimming a clip.
                   -- This is only visual UI state. The real timeline is not changed
                   -- until On_Mouse_Up sends the move command.
@@ -422,8 +463,8 @@ package body Timeline_View is
       (W   : in out Track_widget;
       X, Y : Pixel_Type)
    is
-      pragma Unreferenced (Y);
    begin
+      Set_Razor_Pointer (W, X, Y, True);
       if W.Scrubbing then
          Scrub_To (W, X);
       elsif W.Drag_Active then

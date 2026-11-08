@@ -383,6 +383,8 @@ procedure Framewise_UI is
       V.Playhead := 0;
       V.First_Second := 0.0;
       V.Razor_Mode := False;
+      Set_Selected (+Razor_Button, False);
+      Timeline_View.Set_Razor_Pointer (V.Ptr.all, 0.0, 0.0, False);
       V.Drag_Active := False;
       V.Scrubbing := False;
       Labels.Set_Text (Tool_Status, "Select: drag clips or their edges to edit");
@@ -557,6 +559,8 @@ procedure Framewise_UI is
          begin
             if Button = Widget_Handle'(+Razor_Button) then
                V.Razor_Mode := not V.Razor_Mode;
+               Set_Selected (+Razor_Button, V.Razor_Mode);
+               Mark_Dirty (+Tracks);
                Labels.Set_Text (Tool_Status,
                  (if V.Razor_Mode then "Razor: click inside a clip to split"
                   else "Select: drag clips or their edges to edit"));
@@ -679,6 +683,11 @@ begin
          type Handles is array (Positive range <>) of Widget_Handle;
       begin
          if Mouse.SDL_GetMouseFocus /= Get_SDL_Window (Win) then
+            declare
+               T : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+            begin
+               Timeline_View.Set_Razor_Pointer (T.Ptr.all, 0.0, 0.0, False);
+            end;
             return;
          end if;
          Ignored := Mouse.SDL_GetMouseState (X'Access, Y'Access);
@@ -687,6 +696,8 @@ begin
             M : Editor_Split.Views.Ref := Editor_Split.Views.Borrow (Main_Split);
             V : Editor_Split.Views.Ref := Editor_Split.Views.Borrow (Workspace);
          begin
+            Timeline_View.Set_Razor_Pointer (T.Ptr.all, Pixel_Type (X), Pixel_Type (Y),
+              Overlay_Count (Win) = 0 and then Has_State (+Tracks, State_Hovered));
             if Overlay_Count (Win) = 0 then
                if T.Drag_Active or T.Scrubbing then
                   Kind := Timeline_View.Cursor_At (T.Ptr.all, Pixel_Type (X), Pixel_Type (Y));
@@ -796,7 +807,12 @@ begin
       Add_Child (+Workspace, +Monitor);
       Add_Track_Button := Make_Button (+Timeline_Tools, "Add Track");
       Undo_Button := Make_Button (+Timeline_Tools, "Undo");
-      Razor_Button := Make_Button (+Timeline_Tools, "Razor / Select");
+      Razor_Button := Make_Button (+Timeline_Tools, "Razor");
+      Set_Part_Style (+Razor_Button, Main_Part, Style.Base
+        ((Background_Color => Set_Bg (RGB (38, 50, 67)),
+          Padding => Set (CSS_Box (Px (7.0), Px (10.0))),
+          Border_Radius => Set (Radius (Px (3.0))), others => <>))
+        .On_Selected ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
       Move_Button := Make_Button (+Timeline_Tools, "Move Clip");
       Properties_Button := Make_Button (+Timeline_Tools, "Trim Clip");
       Delete_Button := Make_Button (+Timeline_Tools, "Delete Clip");
@@ -825,6 +841,8 @@ begin
         ((Flex_Grow => Set (1.0), Min_Height => Set (Size (Px (80.0))),
           Overflow_Y => Set (Overflow_Auto), others => <>)).Build);
       Set_Part_Style (+Tracks, Label_Part, Style.Base (Text_Style).Build);
+      Set_Part_Style (+Tracks, Cursor_Part, Style.Base
+        ((Background_Color => Set_Bg (RGB (255, 225, 130)), others => <>)).Build);
       Set_Part_Style (+Tracks, Custom_Part, Style.Base
         ((Background_Color => Set_Bg (RGB (38, 49, 65)), others => <>)).Build);
       Set_Part_Style (+Tracks, Indicator_Part, Style.Base

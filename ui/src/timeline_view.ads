@@ -22,6 +22,8 @@ package Timeline_View is
       Scrubbing      : Boolean := False;
       Preview_Changed : Command_Callback := null;
       Razor_Mode : Boolean := False;
+      Razor_Hover : Boolean := False;
+      Razor_X, Razor_Y : Adi.Core.Pixel_Type := 0.0;
       Selected_Clip : Ada.Strings.Unbounded.Unbounded_String;
       Selection_Changed : Command_Callback := null;
 
@@ -36,6 +38,8 @@ package Timeline_View is
       Drag_Src_Out    : Long_Float := 0.0;
    end record;
 
+   procedure Set_Razor_Pointer (W : in out Track_Widget;
+      X, Y : Adi.Core.Pixel_Type; Active : Boolean);
    function Cursor_At (W : Track_Widget; X, Y : Adi.Core.Pixel_Type)
       return Adi.SDL.Mouse.SDL_SystemCursor;
    function Preview_Text

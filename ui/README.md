@@ -33,8 +33,9 @@ cached and released when the editor closes.
    change source in/out and timeline start as needed. The engine validates
    media compatibility, bounds and overlap.
 4. Select a timeline clip. Drag its body to move it or either edge to trim.
-   **Move Clip** and **Trim Clip** provide numeric dialogs. **Razor / Select**
-   toggles the split tool; click inside a clip to split it. **Delete Clip**
+   **Move Clip** and **Trim Clip** provide numeric dialogs. **Razor**
+   toggles the split tool and lights up blue while active. A vertical guide
+   follows the pointer inside clips to show the split position; click to split. **Delete Clip**
    and **Undo** are also available as buttons.
 5. Drag the ruler to scrub. **Go to Start**, **Earlier**, **Later**, and
    **Zoom +/-** change the view. The black preview area currently displays

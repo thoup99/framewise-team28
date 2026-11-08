@@ -49,6 +49,20 @@ procedure Timeline_View_Tests is
       return (0.0, 0.0, 0.0, 0.0);
    end Clip_Box;
 
+   function Razor_Guide return Rectangle is
+   begin
+      for I in 1 .. Item_Count (+H) loop
+         declare
+            Drawn : constant Item := Get_Item (+H, I);
+         begin
+            if Drawn.Kind = Panel_Item and then Drawn.Part = Cursor_Part then
+               return Drawn.Geometry;
+            end if;
+         end;
+      end loop;
+      return (0.0, 0.0, 0.0, 0.0);
+   end Razor_Guide;
+
    procedure Rebuild is
       V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (H);
    begin
@@ -87,6 +101,37 @@ begin
       pragma Assert (Timeline_View.Cursor_At (V.Ptr.all, -200.0, 50.0) = SDL_SYSTEM_CURSOR_EW_RESIZE);
       V.Drag_Active := False;
       V.Drag_Trim_Left := False;
+   end;
+   --  The razor guide is a clip-local overlay, never a document edit.
+   declare
+      V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (H);
+      History_Before : constant Natural := FS.History_Length (S);
+   begin
+      V.Razor_Mode := True;
+      Timeline_View.Set_Razor_Pointer (V.Ptr.all, 200.0, 50.0, True);
+      Timeline_View.Build_Items (V.Ptr.all);
+      pragma Assert (Razor_Guide = (200.0, 34.0, 2.0, 36.0));
+      Timeline_View.Set_Razor_Pointer (V.Ptr.all, 350.0, 50.0, True);
+      Timeline_View.Build_Items (V.Ptr.all);
+      pragma Assert (Razor_Guide.Width = 0.0);
+      Timeline_View.Set_Razor_Pointer (V.Ptr.all, 110.0, 50.0, True);
+      Timeline_View.Build_Items (V.Ptr.all);
+      pragma Assert (Razor_Guide.Width = 0.0);
+      V.Zoom := 64.0;
+      V.First_Second := 5.0;
+      Timeline_View.Set_Razor_Pointer (V.Ptr.all, 398.0, 50.0, True);
+      Timeline_View.Build_Items (V.Ptr.all);
+      pragma Assert (Razor_Guide = (398.0, 34.0, 2.0, 36.0));
+      Timeline_View.Set_Razor_Pointer (V.Ptr.all, 398.0, 50.0, False);
+      Timeline_View.Build_Items (V.Ptr.all);
+      pragma Assert (Razor_Guide.Width = 0.0);
+      Timeline_View.Set_Razor_Pointer (V.Ptr.all, 398.0, 50.0, True);
+      V.Razor_Mode := False;
+      Timeline_View.Build_Items (V.Ptr.all);
+      pragma Assert (Razor_Guide.Width = 0.0);
+      pragma Assert (FS.History_Length (S) = History_Before);
+      V.Zoom := 32.0;
+      V.First_Second := 0.0;
    end;
    --  Scrub the ruler across a video end, a gap with music, and the
    --  next clip's first tick. Release over the clip row, even in razor mode.
