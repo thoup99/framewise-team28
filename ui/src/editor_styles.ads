@@ -14,6 +14,13 @@ package Editor_Styles is
       Gap => Set (Gap (Px (8.0))), Padding => Set (CSS_Box (Px (12.0))),
       Background_Color => Set_Bg (RGB (20, 26, 36)), others => <>);
 
+   --  Outline floating surfaces without adding borders to the docked panes.
+   Floating_Panel_Style : constant Style_Rules :=
+     (Panel_Style with delta
+      Border_Width => Set (Border_Width (Px (1.0))),
+      Border_Style => Set (Border_Style (Solid)),
+      Border_Color => Set (Border_Color (RGB (105, 125, 153))));
+
    Row_Style : constant Style_Rules :=
      (Display => Set (Flex), Flex_Direction => Set (Row),
       Gap => Set (Gap (Px (6.0))), Flex_Shrink => Set (0.0), others => <>);

@@ -104,7 +104,7 @@ package body Editor_Console is
       Dialogs.Connect_Result (Console_Dialog, Result'Access);
       Dialogs.Set_Panel_Style (Console_Dialog,
         (Main_Part => (Style => Style.Base
-           ((Panel_Style with delta Width => Set (Size (Px (760.0))),
+           ((Floating_Panel_Style with delta Width => Set (Size (Px (760.0))),
              Max_Width => Set (Size (Pct (95.0))), Max_Height => Set (Size (Pct (90.0))))).Build,
          Enabled => True), others => <>));
       Dialogs.Set_Title_Style (Console_Dialog,

@@ -267,7 +267,7 @@ package body Editor_Layout is
       File_Menu := Menus.Create_Handle;
       Menus.Attach_Window (File_Menu, W);
       Menus.Set_Menu_Part_Styles (File_Menu,
-        (Main_Part => (Style => Style.Base (Panel_Style).Build, Enabled => True), others => <>));
+        (Main_Part => (Style => Style.Base (Floating_Panel_Style).Build, Enabled => True), others => <>));
       Menus.Set_Item_Part_Styles (File_Menu,
         (Main_Part =>
            (Style => Style.Base
