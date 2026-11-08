@@ -994,7 +994,7 @@ begin
          M.First := +Workspace;
          M.Second := +Lower;
          M.Vertical := True;
-         M.Fraction := 0.56;
+         M.Fraction := 0.70;
          M.Minimum_First := 180.0;
          M.Minimum_Second := 220.0;
       end;
