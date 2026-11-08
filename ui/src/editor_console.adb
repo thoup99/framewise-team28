@@ -98,7 +98,7 @@ package body Editor_Console is
       Input_Row : constant Boxes.Box_Handle := Boxes.Create_Handle;
       --  Context menus are separate overlays, so they need their own theme.
       Menu_Style : constant Part_Style_Array :=
-        (Main_Part => (Style => Style.Base (Panel_Style).Build, Enabled => True), others => <>);
+        (Main_Part => (Style => Style.Base (Floating_Panel_Style).Build, Enabled => True), others => <>);
       Menu_Item_Style : constant Part_Style_Array :=
         (Main_Part =>
            (Style => Style.Base
