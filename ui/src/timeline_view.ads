@@ -2,6 +2,7 @@
 --  Timeline presentation and mouse-based clip movement.
 with Ada.Strings.Unbounded;
 with Adi.Core;
+with Adi.SDL.Mouse;
 with Adi.Widget;
 with Adi.Widget.Extension;
 with Framewise.Session;
@@ -35,6 +36,8 @@ package Timeline_View is
       Drag_Src_Out    : Long_Float := 0.0;
    end record;
 
+   function Cursor_At (W : Track_Widget; X, Y : Adi.Core.Pixel_Type)
+      return Adi.SDL.Mouse.SDL_SystemCursor;
    function Preview_Text
      (Seq : Framewise.Session.Sequence_View; At_Time : Framewise.Time) return String;
 

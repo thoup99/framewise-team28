@@ -9,6 +9,59 @@ package body Timeline_View is
    Gutter : constant Pixel_Type := 110.0;
    Ruler_Height : constant Pixel_Type := 30.0;
 
+   function Cursor_At (W : Track_Widget; X, Y : Pixel_Type)
+      return Adi.SDL.Mouse.SDL_SystemCursor
+   is
+      use Adi.SDL.Mouse;
+      G : constant Rectangle := Get_Geometry (W);
+      Left : constant Pixel_Type := G.X + Gutter;
+      Right : constant Pixel_Type := G.X + G.Width;
+      Row : Pixel_Type := G.Y + Ruler_Height;
+   begin
+      if W.Scrubbing then
+         return SDL_SYSTEM_CURSOR_EW_RESIZE;
+      elsif W.Drag_Active then
+         return (if W.Drag_Trim_Left or W.Drag_Trim_Right
+                 then SDL_SYSTEM_CURSOR_EW_RESIZE else SDL_SYSTEM_CURSOR_MOVE);
+      end if;
+      if W.Read_Sequence = null or else X < Left or else X > Right
+        or else Y < G.Y or else Y > G.Y + G.Height
+      then
+         return SDL_SYSTEM_CURSOR_DEFAULT;
+      end if;
+      if Y < Row then
+         return SDL_SYSTEM_CURSOR_EW_RESIZE;
+      end if;
+      for T of W.Read_Sequence.all.Tracks loop
+         if T.Used then
+            if Y >= Row + 4.0 and then Y <= Row + 40.0 then
+               for I in 1 .. T.Count loop
+                  declare
+                     C renames T.Clips (I);
+                     X1 : constant Pixel_Type := Left + Pixel_Type
+                       ((Framewise.Seconds (C.Start) - W.First_Second) * W.Zoom);
+                     X2 : constant Pixel_Type := X1 + Pixel_Type
+                       (Framewise.Seconds (C.Src_Out - C.Src_In) * W.Zoom);
+                  begin
+                     if X >= Pixel_Type'Max (Left, X1) and then X <= Pixel_Type'Min (Right, X2) then
+                        if W.Razor_Mode then
+                           return SDL_SYSTEM_CURSOR_CROSSHAIR;
+                        elsif (X1 >= Left and then X <= X1 + 8.0) or else
+                          (X2 <= Right and then X >= X2 - 8.0)
+                        then
+                           return SDL_SYSTEM_CURSOR_EW_RESIZE;
+                        end if;
+                        return SDL_SYSTEM_CURSOR_MOVE;
+                     end if;
+                  end;
+               end loop;
+            end if;
+            Row := Row + 48.0;
+         end if;
+      end loop;
+      return SDL_SYSTEM_CURSOR_DEFAULT;
+   end Cursor_At;
+
    function Preview_Text
      (Seq : Framewise.Session.Sequence_View; At_Time : Framewise.Time) return String
    is

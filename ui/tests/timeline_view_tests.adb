@@ -4,6 +4,7 @@ with Adi.Core; use Adi.Core;
 with Adi.Widget; use Adi.Widget;
 with Framewise.Session;
 with Timeline_View;
+with Adi.SDL.Mouse;
 
 procedure Timeline_View_Tests is
    package FS renames Framewise.Session;
@@ -11,6 +12,7 @@ procedure Timeline_View_Tests is
    R : FS.Response;
    H : Timeline_View.Views.Handle := Timeline_View.Views.New_Widget;
    use type Timeline_View.Views.Handle;
+   use type Adi.SDL.Mouse.SDL_SystemCursor;
    function Read_Sequence return FS.Sequence_View is (FS.Sequence_Of (S));
 
    procedure Run (Line : String; Success : Boolean := True) is
@@ -68,6 +70,24 @@ begin
    pragma Assert (Clip_Box ("c2") = (382.0, 34.0, 160.0, 36.0));
    pragma Assert (Clip_Box ("c3") = (558.0, 34.0, 256.0, 36.0));
    pragma Assert (Clip_Box ("m1") = (110.0, 82.0, 704.0, 36.0));
+   declare
+      V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (H);
+      use Adi.SDL.Mouse;
+   begin
+      pragma Assert (Timeline_View.Cursor_At (V.Ptr.all, 200.0, 10.0) = SDL_SYSTEM_CURSOR_EW_RESIZE);
+      pragma Assert (Timeline_View.Cursor_At (V.Ptr.all, 111.0, 50.0) = SDL_SYSTEM_CURSOR_EW_RESIZE);
+      pragma Assert (Timeline_View.Cursor_At (V.Ptr.all, 200.0, 50.0) = SDL_SYSTEM_CURSOR_MOVE);
+      pragma Assert (Timeline_View.Cursor_At (V.Ptr.all, 350.0, 50.0) = SDL_SYSTEM_CURSOR_DEFAULT);
+      V.Razor_Mode := True;
+      pragma Assert (Timeline_View.Cursor_At (V.Ptr.all, 200.0, 50.0) = SDL_SYSTEM_CURSOR_CROSSHAIR);
+      V.Razor_Mode := False;
+      V.Drag_Active := True;
+      pragma Assert (Timeline_View.Cursor_At (V.Ptr.all, -200.0, 50.0) = SDL_SYSTEM_CURSOR_MOVE);
+      V.Drag_Trim_Left := True;
+      pragma Assert (Timeline_View.Cursor_At (V.Ptr.all, -200.0, 50.0) = SDL_SYSTEM_CURSOR_EW_RESIZE);
+      V.Drag_Active := False;
+      V.Drag_Trim_Left := False;
+   end;
    --  Scrub the ruler across a video end, a gap with music, and the
    --  next clip's first tick. Release over the clip row, even in razor mode.
    declare

@@ -14,6 +14,7 @@ with Adi.Layout_Util;
 with Adi.OS;
 with Adi.SDL.Events;
 with Adi.SDL.Video;
+with Adi.SDL.Mouse;
 with Interfaces.C.Extensions;
 with Interfaces.C.Strings;
 with Adi.Widget; use Adi.Widget;
@@ -662,6 +663,82 @@ begin
       Root, Menu_Row, Bin, Monitor, Lower, Timeline_Tools,
         Placement_Row, Track_Scroll : Boxes.Box_Handle;
       Workspace, Main_Split : Editor_Split.Views.Handle;
+      package Mouse renames Adi.SDL.Mouse;
+      use type Mouse.SDL_SystemCursor;
+      use type Mouse.SDL_Cursor_Access;
+      use type Adi.SDL.Video.SDL_Window_Ptr;
+      type Cursor_Array is array (Mouse.SDL_SystemCursor) of Mouse.SDL_Cursor_Access;
+      Cursors : Cursor_Array := [others => null];
+
+      --  Poll each frame so changes of tool, overlays and drag state are
+      --  reflected even if the pointer remains still. Cache native resources.
+      procedure Update_Cursor (Win : Window_Handle) is
+         X, Y : aliased Float;
+         Ignored : Mouse.SDL_MouseButtonFlags;
+         Kind : Mouse.SDL_SystemCursor := Mouse.SDL_SYSTEM_CURSOR_DEFAULT;
+         type Handles is array (Positive range <>) of Widget_Handle;
+      begin
+         if Mouse.SDL_GetMouseFocus /= Get_SDL_Window (Win) then
+            return;
+         end if;
+         Ignored := Mouse.SDL_GetMouseState (X'Access, Y'Access);
+         declare
+            T : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+            M : Editor_Split.Views.Ref := Editor_Split.Views.Borrow (Main_Split);
+            V : Editor_Split.Views.Ref := Editor_Split.Views.Borrow (Workspace);
+         begin
+            if Overlay_Count (Win) = 0 then
+               if T.Drag_Active or T.Scrubbing then
+                  Kind := Timeline_View.Cursor_At (T.Ptr.all, Pixel_Type (X), Pixel_Type (Y));
+               elsif M.Dragging or else Has_State (+Main_Split, State_Hovered) then
+                  Kind := Editor_Split.Cursor_At (M.Ptr.all, Pixel_Type (X), Pixel_Type (Y));
+               end if;
+               if Kind = Mouse.SDL_SYSTEM_CURSOR_DEFAULT and then
+                 (V.Dragging or else Has_State (+Workspace, State_Hovered))
+               then
+                  Kind := Editor_Split.Cursor_At (V.Ptr.all, Pixel_Type (X), Pixel_Type (Y));
+               end if;
+               if Kind = Mouse.SDL_SYSTEM_CURSOR_DEFAULT and then Has_State (+Tracks, State_Hovered) then
+                  Kind := Timeline_View.Cursor_At (T.Ptr.all, Pixel_Type (X), Pixel_Type (Y));
+               end if;
+            end if;
+         end;
+         if Kind = Mouse.SDL_SYSTEM_CURSOR_DEFAULT then
+            declare
+               Controls : constant Handles := [+File_Button, +Add_Track_Button, +Place_Button,
+                 +Undo_Button, +Delete_Button, +Razor_Button, +Move_Button, +Properties_Button,
+                 +Zoom_In, +Zoom_Out, +Scroll_Left, +Scroll_Right, +Start_Button,
+                 +Source_Choice, +Track_Choice, +Kind_Choice,
+                 +Dialogs.Get_Button_Handle (Form, 1), +Dialogs.Get_Button_Handle (Form, 2),
+                 +Dialogs.Get_Button_Handle (Confirm, 1), +Dialogs.Get_Button_Handle (Confirm, 2)];
+            begin
+               for H of Controls loop
+                  if Has_State (H, State_Hovered) then
+                     Kind := Mouse.SDL_SYSTEM_CURSOR_POINTER;
+                     exit;
+                  end if;
+               end loop;
+               for H of Values loop
+                  if Has_State (+H, State_Hovered) then
+                     Kind := Mouse.SDL_SYSTEM_CURSOR_TEXT;
+                     exit;
+                  end if;
+               end loop;
+            end;
+         end if;
+         if Cursors (Kind) = null then
+            Cursors (Kind) := Mouse.SDL_CreateSystemCursor (Kind);
+         end if;
+         if Cursors (Kind) /= null then
+            declare
+               Applied : constant Adi.SDL.C_bool := Mouse.SDL_SetCursor (Cursors (Kind));
+               pragma Unreferenced (Applied);
+            begin
+               null;
+            end;
+         end if;
+      end Update_Cursor;
+
    begin
       Root := Boxes.Create_Handle;
       Menu_Row := Boxes.Create_Handle;
@@ -861,7 +938,18 @@ begin
       A.Add_Window (W);
       Refresh_Timeline;
       Set_Focus (W, +Tracks);
+      Connect_Frame (W, Update_Cursor'Unrestricted_Access);
       A.Run;
+      declare
+         Restored : constant Adi.SDL.C_bool := Mouse.SDL_SetCursor (Mouse.SDL_GetDefaultCursor);
+         pragma Unreferenced (Restored);
+      begin
+         for C of Cursors loop
+            if C /= null then
+               Mouse.SDL_DestroyCursor (C);
+            end if;
+         end loop;
+      end;
       Menus.Destroy (File_Menu);
       Adi.Window.Destroy (W);
    end;

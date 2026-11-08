@@ -1,4 +1,5 @@
 with Adi.Core;
+with Adi.SDL.Mouse;
 with Adi.Widget;
 with Adi.Widget.Extension;
 
@@ -15,6 +16,8 @@ package Editor_Split is
    function First_Size (Extent : Adi.Core.Pixel_Type; Fraction : Float;
       Minimum_First, Minimum_Second : Adi.Core.Pixel_Type)
       return Adi.Core.Pixel_Type;
+   function Cursor_At (W : Split_Widget; X, Y : Adi.Core.Pixel_Type)
+      return Adi.SDL.Mouse.SDL_SystemCursor;
    overriding procedure Layout (W : in out Split_Widget);
    overriding procedure Build_Items (W : in out Split_Widget);
    overriding procedure On_Mouse_Down

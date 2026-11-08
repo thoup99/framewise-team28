@@ -12,6 +12,13 @@ new dimensions; toolbar rows wrap and crowded panes scroll. Minimum sizes
 keep both sides accessible. Proportions are retained while resizing the window
 for the current session and do not modify the project document.
 
+Mouse cursors follow the current action: left/right arrows on the vertical
+pane divider, up/down arrows on the horizontal divider, a move cursor over
+clip bodies, left/right arrows at trim edges and on the ruler, and a crosshair
+on clips in razor mode. Buttons and dropdowns use a hand; editable fields use
+a text cursor. Drag cursors remain active until release. Native cursors are
+cached and released when the editor closes.
+
 ## Current workflow
 
 1. Use **File > Open Project** to open an existing `.fw` document, or

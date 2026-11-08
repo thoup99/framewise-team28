@@ -27,6 +27,22 @@ package body Editor_Split is
         else (G.X + Size, G.Y, Pixel_Type'Min (Divider_Size, G.Width), G.Height));
    end Divider;
 
+   function Cursor_At (W : Split_Widget; X, Y : Pixel_Type)
+      return Adi.SDL.Mouse.SDL_SystemCursor
+   is
+      use Adi.SDL.Mouse;
+      D : constant Rectangle := Divider (W);
+   begin
+      if W.Dragging or else
+        (X >= D.X and then X <= D.X + D.Width and then
+         Y >= D.Y and then Y <= D.Y + D.Height)
+      then
+         return (if W.Vertical then SDL_SYSTEM_CURSOR_NS_RESIZE
+                 else SDL_SYSTEM_CURSOR_EW_RESIZE);
+      end if;
+      return SDL_SYSTEM_CURSOR_DEFAULT;
+   end Cursor_At;
+
    overriding procedure Layout (W : in out Split_Widget) is
       G : constant Rectangle := Get_Geometry (W);
       D : constant Rectangle := Divider (W);
