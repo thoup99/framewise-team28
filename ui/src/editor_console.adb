@@ -78,6 +78,21 @@ package body Editor_Console is
    procedure Build is
       Content : constant Boxes.Box_Handle := Boxes.Create_Handle;
       Input_Row : constant Boxes.Box_Handle := Boxes.Create_Handle;
+      --  Context menus are separate overlays, so they need their own theme.
+      Menu_Style : constant Part_Style_Array :=
+        (Main_Part => (Style => Style.Base (Panel_Style).Build, Enabled => True), others => <>);
+      Menu_Item_Style : constant Part_Style_Array :=
+        (Main_Part =>
+           (Style => Style.Base
+              ((Padding => Set (CSS_Box (Px (6.0), Px (8.0))), others => <>))
+              .On_Hover ((Background_Color => Set_Bg (RGB (45, 78, 119)), others => <>))
+              .On_Selected ((Background_Color => Set_Bg (RGB (45, 78, 119)), others => <>)).Build,
+            Enabled => True),
+         Label_Part =>
+           (Style => Style.Base (Text_Style)
+              .On_Disabled ((Color => Set (RGB (145, 155, 170)), others => <>)).Build,
+            Enabled => True),
+         others => <>);
    begin
       Console_Dialog := Dialogs.Create_Handle;
       Dialogs.Attach_Window (Console_Dialog, W);
@@ -105,6 +120,8 @@ package body Editor_Console is
       Add_Label (+Content, "Enter a Framewise command, then press Enter or Run.");
       Console_Output := Text_Editors.Create_Handle ("Framewise console ready." & Ada.Characters.Latin_1.LF);
       Text_Editors.Set_Read_Only (Console_Output);
+      Text_Editors.Set_Context_Menu_Part_Styles (Console_Output, Menu_Style);
+      Text_Editors.Set_Context_Menu_Item_Part_Styles (Console_Output, Menu_Item_Style);
       Set_Part_Style (+Console_Output, Main_Part, Style.Base
         ((Flex_Grow => Set (1.0), Height => Set (Size (Px (0.0))),
           Min_Height => Set (Size (Px (40.0))),
@@ -116,6 +133,8 @@ package body Editor_Console is
       Add_Label (+Input_Row, ">");
       Console_Input := Inputs.Create_Handle;
       Inputs.Set_Min_Visible_Chars (Console_Input, 12);
+      Inputs.Set_Context_Menu_Part_Styles (Console_Input, Menu_Style);
+      Inputs.Set_Context_Menu_Item_Part_Styles (Console_Input, Menu_Item_Style);
       Set_Part_Style (+Console_Input, Main_Part, Style.Base
         ((Flex_Grow => Set (1.0), Width => Set (Size (Px (0.0))),
           Min_Width => Set (Size (Px (60.0))),
