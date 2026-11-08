@@ -12,6 +12,8 @@ with Adi.OS;
 with Adi.App;
 with Editor_Styles; use Editor_Styles;
 with Ada.Characters.Latin_1;
+with Ada.Characters.Handling;
+with Editor_Console;
 with Ada.Directories;
 with Ada.Strings.Fixed;
 with Interfaces.C.Extensions;
@@ -271,6 +273,44 @@ package body Editor_Controller is
       end if;
    end Open_Selected;
 
+   procedure Execute_Console_Line (Line : String) is
+      Separator : Natural := Line'Last + 1;
+      Path_First : Natural;
+   begin
+      Execute_Line (Line);
+      if not Reply.Ok then
+         return;
+      end if;
+
+      --  The session handles parsing and execution. Only successful save/load
+      --  commands need extra UI bookkeeping, just like the File menu actions.
+      for I in Line'Range loop
+         if Line (I) in ' ' | Ada.Characters.Latin_1.HT then
+            Separator := I;
+            exit;
+         end if;
+      end loop;
+      Path_First := Separator;
+      while Path_First <= Line'Last and then
+        Line (Path_First) in ' ' | Ada.Characters.Latin_1.HT
+      loop
+         Path_First := Path_First + 1;
+      end loop;
+      declare
+         Verb : constant String := Ada.Characters.Handling.To_Lower
+           (Line (Line'First .. Separator - 1));
+      begin
+         if Verb in "save" | "load" then
+            Project_Path := US.To_Unbounded_String (Line (Path_First .. Line'Last));
+            Saved_History := History;
+            if Verb = "load" then
+               Reset_View;
+            end if;
+            Refresh_Timeline;
+         end if;
+      end;
+   end Execute_Console_Line;
+
    procedure Continue_Action is
       Action : constant Pending_Action := Pending;
    begin
@@ -368,7 +408,9 @@ package body Editor_Controller is
             return;
          end if;
       end loop;
-      if Button = Widget_Handle'(+File_Button) then
+      if Button = Widget_Handle'(+Console_Button) then
+         Editor_Console.Show;
+      elsif Button = Widget_Handle'(+File_Button) then
          declare
             G : constant Rectangle := Get_Geometry (Button);
          begin
@@ -494,6 +536,10 @@ package body Editor_Controller is
       use type Adi.SDL.Events.SDL_Keymod;
       Ctrl : constant Boolean := (Key_Mod and Adi.SDL.Events.SDL_KMOD_CTRL) /= 0;
    begin
+      if Dialogs.Is_Shown (Console_Dialog) then
+         Editor_Console.Handle_Key (Scancode, Repeat, Handled);
+         return;
+      end if;
       if Repeat or else Dialogs.Is_Shown (Form) or else Dialogs.Is_Shown (Confirm) then
          return;
       end if;

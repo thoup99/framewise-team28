@@ -41,6 +41,11 @@ package Editor_Context is
    Form, Confirm : Dialogs.Dialog_Handle;
    Form_Content : Boxes.Box_Handle;
 
+   Console_Dialog : Dialogs.Dialog_Handle;
+   Console_Input : Inputs.Text_Input_Handle;
+   Console_Output : Adi.Widget.Text_Editor.Text_Editor_Handle;
+   Console_Button : Buttons.Button_Handle;
+
    type Box_Array is array (Positive range <>) of Boxes.Box_Handle;
    type Dialog_Array is array (Positive range <>) of Dialogs.Dialog_Handle;
    type Input_Array is array (Positive range 1 .. 3) of Inputs.Text_Input_Handle;

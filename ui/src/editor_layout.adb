@@ -12,6 +12,7 @@ with Editor_Styles; use Editor_Styles;
 with Editor_Widgets; use Editor_Widgets;
 with Editor_Controller; use Editor_Controller;
 with Editor_Dialogs;
+with Editor_Console;
 
 package body Editor_Layout is
    use type Buttons.Button_Handle;
@@ -60,6 +61,15 @@ package body Editor_Layout is
    procedure Build_Project_Files is
    begin
       File_Button := Make_Button (+Menu_Row, "File");
+      declare
+         Spacer : constant Boxes.Box_Handle := Boxes.Create_Handle;
+      begin
+         Set_Part_Style (+Spacer, Main_Part, Style.Base
+           ((Flex_Grow => Set (1.0), others => <>)).Build);
+         Add_Child (+Menu_Row, +Spacer);
+      end;
+      Console_Button := Make_Button (+Menu_Row, "Console");
+
       Add_Label (+Bin, "Project Files");
       Add_Child (+Bin, +Filter_Row);
       Filter_Buttons (All_Media) := Make_Button (+Filter_Row, "All");
@@ -287,6 +297,7 @@ package body Editor_Layout is
       Build_Timeline;
       Arrange_Panels;
       Editor_Dialogs.Build;
+      Editor_Console.Build;
       Build_File_Menu;
       Menus.Connect_Item_Selected (File_Menu, Menu_Selected'Access);
       Connect_Key_Down (W, Key_Down'Access);

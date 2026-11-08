@@ -65,12 +65,14 @@ package body Editor_Cursors is
          declare
             Controls : constant Handles := [+Filter_Buttons (All_Media),
               +Filter_Buttons (Video_Media), +Filter_Buttons (Audio_Media),
-              +File_Button, +Add_Track_Button, +Place_Button,
+              +Console_Button, +File_Button, +Add_Track_Button, +Place_Button,
               +Undo_Button, +Delete_Button, +Razor_Button, +Move_Button,
               +Zoom_In, +Zoom_Out, +Scroll_Left, +Scroll_Right, +Start_Button, +End_Button,
               +Source_Choice, +Track_Choice, +Kind_Choice,
               +Dialogs.Get_Button_Handle (Form, 1), +Dialogs.Get_Button_Handle (Form, 2),
-              +Dialogs.Get_Button_Handle (Confirm, 1), +Dialogs.Get_Button_Handle (Confirm, 2)];
+              +Dialogs.Get_Button_Handle (Confirm, 1), +Dialogs.Get_Button_Handle (Confirm, 2),
+              +Dialogs.Get_Button_Handle (Console_Dialog, 1),
+              +Dialogs.Get_Button_Handle (Console_Dialog, 2)];
          begin
             for H of Controls loop
                if Has_State (H, State_Hovered) then
@@ -78,6 +80,9 @@ package body Editor_Cursors is
                   exit;
                end if;
             end loop;
+            if Has_State (+Console_Input, State_Hovered) then
+               Kind := Mouse.SDL_SYSTEM_CURSOR_TEXT;
+            end if;
             for H of Values loop
                if Has_State (+H, State_Hovered) then
                   Kind := Mouse.SDL_SYSTEM_CURSOR_TEXT;

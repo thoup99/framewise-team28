@@ -1,9 +1,9 @@
 # Framewise desktop editor
 
 The editor uses a traditional layout inspired by OpenShot: a File menu at the top, Project Files on the left, Video Preview on the
-right, and a full-width timeline below. No command entry or command history
-panel is shown. The shared Session command protocol is an implementation
-detail; users edit through menus, buttons, dialogs and timeline gestures.
+right, and a full-width timeline below. Users edit through menus, buttons,
+dialogs and timeline gestures. An optional Console button at the far right
+of the top bar opens a floating command console.
 
 Drag the blue vertical divider between Project Files and Video Preview to
 change their widths. Drag the horizontal divider above the timeline controls
@@ -28,6 +28,22 @@ it does not remove sources or edit the project.
 When tracks exceed the timeline viewport, a vertical scrollbar appears on
 its right edge. Drag the thumb, click the scrollbar track or use the wheel
 to reach tracks below the viewport. It hides when all tracks fit.
+
+## Optional console
+
+Click **Console** in the upper-right corner to open **Framewise Console** above
+the editor. The command field receives focus immediately and has a bright
+blinking caret and a `>` prompt. Press **Enter** or **Run** to submit a command;
+the scrollable transcript shows the command and its response, including errors.
+**Close** or **Escape** returns to the editor. The transcript and unfinished
+input remain available when the console is reopened during the same session.
+
+The console uses the same project session as the GUI. For example,
+`track Main_Video video` creates a track and refreshes the timeline and target
+track selector; `list` inspects the current project and `undo` undoes its latest
+edit. Successful `save path.fw` and `load path.fw` commands also update the
+current document path, window title, and unsaved-change state. Console commands
+use the existing Framewise syntax and validation; they are optional.
 
 ## Current workflow
 
@@ -146,7 +162,9 @@ zoom, playhead, rejected edits, cursor choices and the Razor split guide.
 results, named tracks and validation, caret/focus, placement and move dialogs,
 Razor selected state, navigation, settings, real export (including failure),
 save/save-as and cancellation, native window titles, unsaved-change prompts,
-routed divider dragging and routed scrollbar thumb/track interaction.
+routed divider dragging and routed scrollbar thumb/track interaction. Console
+checks cover button placement, modal opening, a rendered caret, routed typing,
+Enter/Run, errors, save/load bookkeeping, and transcript persistence.
 It verifies the exported video with ffprobe and compares GUI and CLI saved
 `.fw` documents byte for byte. Test files live in a disposable temporary folder.
 
@@ -174,6 +192,7 @@ workflow log and generated regression driver to help locate the failed check.
 | `Editor_Application` | Window startup, event loop, and cleanup |
 | `Editor_Context` | Single backend session, widget handles, and shared UI state |
 | `Editor_Controller` | Session commands, document lifecycle, and editor callbacks |
+| `Editor_Console` | Floating command console, input focus, and command transcript |
 | `Editor_Dialogs` | Form construction, input validation, and import results |
 | `Editor_Layout` | Project files, preview, timeline controls, menus, and panel arrangement |
 | `Editor_Styles` | Shared text, panel, button, and dropdown styles |

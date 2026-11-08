@@ -20,6 +20,9 @@ package Editor_Controller is
 
    procedure Execute_Line (Line : String);
 
+   --  Execute console commands and synchronize save/load document bookkeeping.
+   procedure Execute_Console_Line (Line : String);
+
    function Valid_Path (Text : String) return Boolean;
 
    function Unique_Name (Prefix : String) return String;
