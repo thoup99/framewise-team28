@@ -105,11 +105,7 @@ package body Editor_Dialogs is
          Captions (I) := Make_Label (+Form_Content, "");
          Values (I) := Inputs.Create_Handle ("");
          Inputs.Set_Min_Visible_Chars (Values (I), 24);
-         Set_Part_Style (+Values (I), Text_Part, Style.Base (Text_Style).Build);
-         Set_Part_Style (+Values (I), Cursor_Part, Style.Base
-           ((Background_Color => Set_Bg (RGB (240, 245, 255)), others => <>)).Build);
-         Set_Part_Style (+Values (I), Selected_Part, Style.Base
-           ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
+         Style_Input_Text (+Values (I));
          Set_Part_Style (+Values (I), Main_Part, Style.Base
            ((Width => Set (Size (Px (Form_Control_Width))),
              Background_Color => Set_Bg (RGB (38, 50, 67)),

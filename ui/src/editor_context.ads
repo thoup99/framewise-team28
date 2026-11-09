@@ -39,7 +39,6 @@ package Editor_Context is
    Sources : Adi.Widget.Text_Editor.Text_Editor_Handle;
    Source_Choice, Track_Choice, Kind_Choice : Combos.Combo_Box_Handle;
    File_Menu, Clip_Menu : Menus.Menu_Handle;
-   Clip_Menu_Target : US.Unbounded_String;
    Form, Confirm : Dialogs.Dialog_Handle;
    Form_Content : Boxes.Box_Handle;
 
@@ -77,7 +76,6 @@ package Editor_Context is
    Form_Target : US.Unbounded_String;
    Dirty : Boolean := False;
    Allow_Close : Boolean := False;
-   Serial : Natural := 0;
 
    Root, Menu_Row, Filter_Row, Playback_Row, Bin, Monitor, Lower, Timeline_Tools,
      Placement_Row, Track_Scroll : Boxes.Box_Handle;

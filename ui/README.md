@@ -263,3 +263,29 @@ The UI still submits document changes through `Framewise.Session.Execute`.
 Shared context holds handles and transient editor state; the session remains
 the source of truth for the project. Dialogs and the controller call each other
 through their package interfaces, while layout only builds and connects widgets.
+
+## UI code organization
+
+The UI depends on `Framewise.Session` for document operations. Keep new editing
+behavior behind that boundary so the GUI and CLI use the same validation rules.
+
+| Module | Responsibility |
+| --- | --- |
+| `Editor_Layout` | Compose panels, splitters, menus and overlay callbacks. |
+| `Editor_Project_Panel`, `Editor_Preview_Panel`, `Editor_Timeline_Panel` | Build the contents of each main panel. |
+| `Editor_Controller` | Shared command execution, logging, filtered view refresh and stable widget callbacks. |
+| `Editor_Project_Actions` | File dialogs, project lifecycle, save/load bookkeeping and the File menu. |
+| `Editor_Timeline_Actions` | Timeline toolbar actions, clip context menu and cursor input. |
+| `Editor_Shortcuts` | Keyboard routing, including modal and text-input focus guards. |
+| `Editor_Styles` | Shared panel, menu, button, input and scrollbar appearance. |
+| `Timeline_View` | Timeline drawing and mouse gestures; `Set_Playhead` synchronizes cursor navigation with the preview. |
+| `Editor_Context` | Shared session and widget handles; action-specific implementation state stays in its owning module. |
+
+Ordinary edits go through `Editor_Controller.Execute_Line`. Console submissions
+use the same execution boundary with a console origin and project bookkeeping.
+New Project clears the session internally and records one action. Cursor navigation
+updates the view without adding undo history or a console command.
+
+Run the existing GUI interaction and editor workflow regressions after changing
+these modules; they cover focus, gestures, menus, logging, export and document
+round trips. The layout preference tests also check restoration between launches.

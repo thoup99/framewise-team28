@@ -292,19 +292,24 @@ package body Timeline_View is
       return "No video clip | " & Stamp;
    end Preview_Text;
 
+   procedure Set_Playhead (W : in out Track_Widget; Position : Framewise.Time) is
+   begin
+      W.Playhead := Position;
+      if W.Preview_Changed /= null and then W.Read_Sequence /= null then
+         W.Preview_Changed.all (Preview_Text (W.Read_Sequence.all, Position));
+      end if;
+      Mark_Dirty (W);
+   end Set_Playhead;
+
    procedure Scrub_To (W : in out Track_Widget; X : Pixel_Type) is
       G : constant Rectangle := Get_Geometry (W);
       Offset : constant Pixel_Type :=
         Pixel_Type'Max (0.0, Pixel_Type'Min (X - G.X, G.Width) - Gutter);
    begin
       W.Drag_Current_X := X;
-      W.Playhead := Framewise.Time
+      Set_Playhead (W, Framewise.Time
         (Long_Float'Min (Long_Float (Framewise.Time'Last),
-         Snap_Time (W, W.First_Second + Long_Float (Offset) / W.Zoom) * Long_Float (Framewise.Timebase)));
-      if W.Preview_Changed /= null then
-         W.Preview_Changed.all (Preview_Text (W.Read_Sequence.all, W.Playhead));
-      end if;
-      Mark_Dirty (W);
+         Snap_Time (W, W.First_Second + Long_Float (Offset) / W.Zoom) * Long_Float (Framewise.Timebase))));
    end Scrub_To;
 
    overriding procedure Build_Items (W : in out Track_Widget) is
@@ -507,6 +512,53 @@ package body Timeline_View is
       end;
    end Build_Items;
 
+   --  Keep razor command construction separate from pointer hit testing.
+   --  The session validates the resulting split; the UI only rejects endpoints
+   --  and picks a name that is unused by the current document's clips.
+   procedure Try_Split
+     (W : Track_Widget; Seq : Framewise.Session.Sequence_View;
+      Name : String; Start, Length : Framewise.Time; At_Second : Long_Float)
+   is
+      Cut : Framewise.Time;
+   begin
+      if W.Submit_Command = null or else At_Second < 0.0 or else
+        At_Second >= Framewise.Seconds (Framewise.Time'Last / 2)
+      then
+         return;
+      end if;
+
+      Cut := Framewise.Time (At_Second * Long_Float (Framewise.Timebase));
+      if Cut <= Start or else Cut - Start >= Length then
+         return;
+      end if;
+
+      for N in 1 .. 9999 loop
+         declare
+            New_Name : constant String :=
+              "r" & Ada.Strings.Fixed.Trim (Positive'Image (N), Ada.Strings.Left);
+            Taken : Boolean := False;
+         begin
+            for Track of Seq.Tracks loop
+               if Track.Used then
+                  for I in 1 .. Track.Count loop
+                     if Framewise.Image (Track.Clips (I).N) = New_Name then
+                        Taken := True;
+                        exit;
+                     end if;
+                  end loop;
+               end if;
+               exit when Taken;
+            end loop;
+
+            if not Taken then
+               W.Submit_Command.all
+                 ("split " & Name & " " & Framewise.Session.Image_Time (Cut) & " " & New_Name);
+               return;
+            end if;
+         end;
+      end loop;
+   end Try_Split;
+
    overriding procedure On_Mouse_Down
      (W      : in out Track_Widget;
       X, Y   : Pixel_Type;
@@ -519,7 +571,6 @@ package body Timeline_View is
       Right : constant Pixel_Type := G.X + G.Width;
       Row_Y : Pixel_Type := G.Y + Ruler_Height;
    begin
-
       if Button /= Left_Button then
          return;
       end if;
@@ -566,73 +617,21 @@ package body Timeline_View is
                         if X >= Pixel_Type'Max (Left, Clip_X1)
                           and then X <= Pixel_Type'Min (Right, Clip_X2)
                         then
-   if not W.Razor_Mode then
-      W.Selected_Clip :=
-         To_Unbounded_String (Framewise.Image (C.N));
+                           if not W.Razor_Mode then
+                              W.Selected_Clip :=
+                                 To_Unbounded_String (Framewise.Image (C.N));
 
-      if W.Selection_Changed /= null then
-         W.Selection_Changed.all (Framewise.Image (C.N));
-      end if;
-   end if;
-   --  In Razor Mode, a click splits the clip instead of dragging it.
-   if W.Razor_Mode then
-      if W.Submit_Command /= null then
-         declare
-            Cut_Seconds : constant Long_Float :=
-              W.First_Second + Long_Float (X - Left) / W.Zoom;
-         begin
-            if Cut_Seconds >= 0.0
-              and then Cut_Seconds <
-                Long_Float (Framewise.Time'Last / 2) /
-                Long_Float (Framewise.Timebase)
-            then
-               declare
-                  Cut : constant Framewise.Time :=
-                    Framewise.Time
-                      (Cut_Seconds * Long_Float (Framewise.Timebase));
-               begin
-                  --  The cut must be strictly inside the clip.
-                  if Cut > C.Start
-                    and then Cut - C.Start < C.Src_Out - C.Src_In
-                  then
-                     --  Find an unused name for the right-hand clip.
-                     for N in 1 .. 9999 loop
-                        declare
-                           New_Name : constant String :=
-                             "r" & Ada.Strings.Fixed.Trim
-                               (Positive'Image (N), Ada.Strings.Left);
-                           Taken : Boolean := False;
-                        begin
-                           for Other_Track of Seq.Tracks loop
-                              if Other_Track.Used then
-                                 for J in 1 .. Other_Track.Count loop
-                                    if Framewise.Image
-                                      (Other_Track.Clips (J).N) = New_Name
-                                    then
-                                       Taken := True;
-                                       exit;
-                                    end if;
-                                 end loop;
+                              if W.Selection_Changed /= null then
+                                 W.Selection_Changed.all (Framewise.Image (C.N));
                               end if;
-                              exit when Taken;
-                           end loop;
-
-                           if not Taken then
-                              W.Submit_Command.all
-                                ("split " & Framewise.Image (C.N) & " " &
-                                 Framewise.Session.Image_Time (Cut) &
-                                 " " & New_Name);
+                           end if;
+                           --  Razor clicks split; selection clicks begin a drag.
+                           if W.Razor_Mode then
+                              Try_Split (W, Seq, Framewise.Image (C.N), C.Start,
+                                C.Src_Out - C.Src_In,
+                                W.First_Second + Long_Float (X - Left) / W.Zoom);
                               return;
                            end if;
-                        end;
-                     end loop;
-                  end if;
-               end;
-            end if;
-         end;
-      end if;
-      return;
-   end if;
 
                            W.Drag_Name :=
                              To_Unbounded_String (Framewise.Image (C.N));
@@ -642,17 +641,17 @@ package body Timeline_View is
                            W.Drag_Src_In := Framewise.Seconds (C.Src_In);
                            W.Drag_Src_Out := Framewise.Seconds (C.Src_Out);
 
-                        -- First/last 8 pixels act as trim handles.
-                        -- A clipped-off edge is not treated as a handle.
-                        W.Drag_Trim_Left :=
-                           Clip_X1 >= Left and then X <= Clip_X1 + 8.0;
+                           --  First/last 8 pixels act as trim handles.
+                           --  A clipped-off edge is not treated as a handle.
+                           W.Drag_Trim_Left :=
+                              Clip_X1 >= Left and then X <= Clip_X1 + 8.0;
 
-                        W.Drag_Trim_Right :=
-                           not W.Drag_Trim_Left
-                           and then Clip_X2 <= Right
-                           and then X >= Clip_X2 - 8.0;
+                           W.Drag_Trim_Right :=
+                              not W.Drag_Trim_Left
+                              and then Clip_X2 <= Right
+                              and then X >= Clip_X2 - 8.0;
 
-                        W.Drag_Active := True;
+                           W.Drag_Active := True;
                            return;
                         end if;
                      end;

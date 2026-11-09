@@ -89,6 +89,8 @@
             V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
          begin
             Check (V.Playhead = Framewise.Timebase / 30, "Arrow advances one project frame");
+            Check (Inputs.Get_Text (Cursor_Time_Input) = FS.Image_Time (V.Playhead),
+                   "Keyboard navigation synchronizes the cursor field");
          end;
          Adi.Window.On_Key_Down (W, Adi.SDL.Events.SDL_SCANCODE_HOME, 0, 0, False);
 
@@ -101,7 +103,7 @@
          begin
             Check (V.Playhead = Framewise.Timebase * 25 / 2, "Cursor field jumps precisely");
             Inputs.Set_Text (Cursor_Time_Input, "");
-         Adi.Window.On_Text_Input (W, "-2");
+            Adi.Window.On_Text_Input (W, "-2");
             Check (V.Playhead = Framewise.Timebase * 25 / 2, "Invalid cursor input keeps prior position");
          end;
          Inputs.Set_Text (Cursor_Time_Input, "");
@@ -367,12 +369,16 @@
             T : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
          begin
             Check (T.Playhead = 2 * Framewise.Timebase, "Go to project end");
+            Check (Inputs.Get_Text (Cursor_Time_Input) = "2",
+                   "End button synchronizes the cursor field");
          end;
          Clicked (+Start_Button);
          declare
             T : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
          begin
             Check (T.Playhead = 0, "Go to beginning");
+            Check (Inputs.Get_Text (Cursor_Time_Input) = "0",
+                   "Start button synchronizes the cursor field");
          end;
          Check (History = Initial_History, "Tool and transport controls must not edit history");
 
@@ -916,8 +922,14 @@
             begin
                Adi.Window.On_Mouse_Down (W, G.X + 110.0 + 3.0 * 32.0, G.Y + 98.0, Right_Button);
                Render (W);
-               Check (Menus.Is_Shown (Clip_Menu) and then US.To_String (Clip_Menu_Target) = "m1",
-                      "Scrolled clip context menu targets the visible audio clip");
+               Check (Menus.Is_Shown (Clip_Menu), "Scrolled clip context menu opens");
+               Clip_Menu_Selected (Clip_Menu, 2, "Snap Timeline Cursor Right");
+               declare
+                  V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+               begin
+                  Check (V.Playhead = 22 * Framewise.Timebase,
+                         "Scrolled context menu snaps to the visible audio clip's end");
+               end;
                Menus.Hide (Clip_Menu);
             end;
 

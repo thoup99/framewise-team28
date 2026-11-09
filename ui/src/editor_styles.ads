@@ -1,3 +1,4 @@
+with Adi.Widget; use Adi.Widget;
 with Adi.Core; use Adi.Core;
 with Adi.CSS_Styles; use Adi.CSS_Styles;
 with Adi.Widget_Styles; use Adi.Widget_Styles;
@@ -24,6 +25,20 @@ package Editor_Styles is
    Row_Style : constant Style_Rules :=
      (Display => Set (Flex), Flex_Direction => Set (Row),
       Gap => Set (Gap (Px (6.0))), Flex_Shrink => Set (0.0), others => <>);
+
+   --  Menus are separate overlays and do not inherit the panel theme.
+   Popup_Menu_Styles : constant Part_Style_Array :=
+     (Main_Part => (Style => Style.Base (Floating_Panel_Style).Build, Enabled => True),
+      others => <>);
+
+   function Menu_Item_Styles
+     (Highlight_Selection : Boolean := True;
+      Dim_Disabled : Boolean := False) return Part_Style_Array;
+
+   --  Keep caret/selection colors shared while callers control input geometry.
+   procedure Style_Input_Text (H : Widget_Handle; Selection : Boolean := True);
+
+   procedure Style_Scrollbar (H : Widget_Handle; Highlight_Interactions : Boolean := True);
 
    Form_Control_Width : constant Float := 360.0;
 

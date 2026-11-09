@@ -101,21 +101,6 @@ package body Editor_Console is
    procedure Build is
       Content : constant Boxes.Box_Handle := Boxes.Create_Handle;
       Input_Row : constant Boxes.Box_Handle := Boxes.Create_Handle;
-      --  Context menus are separate overlays, so they need their own theme.
-      Menu_Style : constant Part_Style_Array :=
-        (Main_Part => (Style => Style.Base (Floating_Panel_Style).Build, Enabled => True), others => <>);
-      Menu_Item_Style : constant Part_Style_Array :=
-        (Main_Part =>
-           (Style => Style.Base
-              ((Padding => Set (CSS_Box (Px (6.0), Px (8.0))), others => <>))
-              .On_Hover ((Background_Color => Set_Bg (RGB (45, 78, 119)), others => <>))
-              .On_Selected ((Background_Color => Set_Bg (RGB (45, 78, 119)), others => <>)).Build,
-            Enabled => True),
-         Label_Part =>
-           (Style => Style.Base (Text_Style)
-              .On_Disabled ((Color => Set (RGB (145, 155, 170)), others => <>)).Build,
-            Enabled => True),
-         others => <>);
    begin
       Console_Dialog := Dialogs.Create_Handle;
       Dialogs.Attach_Window (Console_Dialog, W);
@@ -143,8 +128,8 @@ package body Editor_Console is
       Add_Label (+Content, "Enter a Framewise command, then press Enter or Run.");
       Console_Output := Text_Editors.Create_Handle ("Framewise console ready." & Ada.Characters.Latin_1.LF);
       Text_Editors.Set_Read_Only (Console_Output);
-      Text_Editors.Set_Context_Menu_Part_Styles (Console_Output, Menu_Style);
-      Text_Editors.Set_Context_Menu_Item_Part_Styles (Console_Output, Menu_Item_Style);
+      Text_Editors.Set_Context_Menu_Part_Styles (Console_Output, Popup_Menu_Styles);
+      Text_Editors.Set_Context_Menu_Item_Part_Styles (Console_Output, Menu_Item_Styles (Dim_Disabled => True));
       Set_Part_Style (+Console_Output, Main_Part, Style.Base
         ((Flex_Grow => Set (1.0), Height => Set (Size (Px (0.0))),
           Min_Height => Set (Size (Px (40.0))),
@@ -152,15 +137,7 @@ package body Editor_Console is
           Background_Color => Set_Bg (RGB (12, 17, 24)), others => <>)).Build);
       --  The transcript owns its scrolling, so its scrollbar receives mouse
       --  presses before text selection and remains inside the modal dialog.
-      Set_Part_Style (+Console_Output, Scroll_Part, Style.Base
-        ((Width => Set (Size (Px (14.0))),
-          Background_Color => Set_Bg (RGB (22, 29, 40)), others => <>)).Build);
-      Set_Part_Style (+Console_Output, Knob_Part, Style.Base
-        ((Width => Set (Size (Px (10.0))), Min_Height => Set (Size (Px (24.0))),
-          Background_Color => Set_Bg (RGB (115, 135, 160)),
-          Border_Radius => Set (Radius (Px (5.0))), others => <>))
-        .On_Hover ((Background_Color => Set_Bg (RGB (145, 170, 200)), others => <>))
-        .On_Press ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
+      Style_Scrollbar (+Console_Output);
       Set_Part_Style (+Console_Output, Text_Part, Style.Base (Text_Style).Build);
       Add_Child (+Content, +Console_Output);
 
@@ -168,20 +145,14 @@ package body Editor_Console is
       Add_Label (+Input_Row, ">");
       Console_Input := Inputs.Create_Handle;
       Inputs.Set_Min_Visible_Chars (Console_Input, 12);
-      Inputs.Set_Context_Menu_Part_Styles (Console_Input, Menu_Style);
-      Inputs.Set_Context_Menu_Item_Part_Styles (Console_Input, Menu_Item_Style);
+      Inputs.Set_Context_Menu_Part_Styles (Console_Input, Popup_Menu_Styles);
+      Inputs.Set_Context_Menu_Item_Part_Styles (Console_Input, Menu_Item_Styles (Dim_Disabled => True));
       Set_Part_Style (+Console_Input, Main_Part, Style.Base
         ((Flex_Grow => Set (1.0), Width => Set (Size (Px (0.0))),
           Min_Width => Set (Size (Px (60.0))),
           Background_Color => Set_Bg (RGB (38, 50, 67)),
           Padding => Set (CSS_Box (Px (6.0))), others => <>)).Build);
-      Set_Part_Style (+Console_Input, Text_Part, Style.Base (Text_Style).Build);
-      --  A light caret remains visible against the dark input, including
-      --  when the field is empty. Show and Submit both restore input focus.
-      Set_Part_Style (+Console_Input, Cursor_Part, Style.Base
-        ((Background_Color => Set_Bg (RGB (240, 245, 255)), others => <>)).Build);
-      Set_Part_Style (+Console_Input, Selected_Part, Style.Base
-        ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
+      Style_Input_Text (+Console_Input);
       Add_Child (+Input_Row, +Console_Input);
       Add_Child (+Content, +Input_Row);
       Dialogs.Set_Content (Console_Dialog, +Content);

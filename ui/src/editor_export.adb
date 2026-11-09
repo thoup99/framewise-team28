@@ -141,22 +141,14 @@ package body Editor_Export is
       Show_Progress;
       Output := Adi.Widget.Text_Editor.Create_Handle;
       Adi.Widget.Text_Editor.Set_Read_Only (Output);
-      Adi.Widget.Text_Editor.Set_Context_Menu_Part_Styles (Output,
-        (Main_Part => (Style => Style.Base (Floating_Panel_Style).Build, Enabled => True), others => <>));
-      Adi.Widget.Text_Editor.Set_Context_Menu_Item_Part_Styles (Output,
-        (Main_Part => (Style => Style.Base
-           ((Padding => Set (CSS_Box (Px (6.0), Px (8.0))), others => <>))
-           .On_Hover ((Background_Color => Set_Bg (RGB (45, 78, 119)), others => <>)).Build, Enabled => True),
-         Label_Part => (Style => Style.Base (Text_Style).Build, Enabled => True), others => <>));
+      Adi.Widget.Text_Editor.Set_Context_Menu_Part_Styles (Output, Popup_Menu_Styles);
+      Adi.Widget.Text_Editor.Set_Context_Menu_Item_Part_Styles
+        (Output, Menu_Item_Styles (Highlight_Selection => False));
       Set_Part_Style (+Output, Main_Part, Style.Base
         ((Height => Set (Size (Px (240.0))), Overflow_Y => Set (Overflow_Auto),
           Background_Color => Set_Bg (RGB (12, 17, 24)), others => <>)).Build);
       Set_Part_Style (+Output, Text_Part, Style.Base (Text_Style).Build);
-      Set_Part_Style (+Output, Scroll_Part, Style.Base
-        ((Width => Set (Size (Px (14.0))), Background_Color => Set_Bg (RGB (22, 29, 40)), others => <>)).Build);
-      Set_Part_Style (+Output, Knob_Part, Style.Base
-        ((Width => Set (Size (Px (10.0))), Min_Height => Set (Size (Px (24.0))),
-          Background_Color => Set_Bg (RGB (115, 135, 160)), others => <>)).Build);
+      Style_Scrollbar (+Output, Highlight_Interactions => False);
       Add_Child (+Content, +Output);
       Add_Child (+Content, +Progress_Label);
       Add_Child (+Content, +Progress_Track);

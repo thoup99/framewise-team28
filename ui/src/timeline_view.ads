@@ -41,6 +41,10 @@ package Timeline_View is
       Drag_Src_Out    : Long_Float := 0.0;
    end record;
 
+   --  Navigation updates the marker, preview and cursor field together.
+   --  It does not submit a document edit or change undo history.
+   procedure Set_Playhead (W : in out Track_Widget; Position : Framewise.Time);
+
    procedure Set_Razor_Pointer (W : in out Track_Widget;
       X, Y : Adi.Core.Pixel_Type; Active : Boolean);
    --  Coordinates use widget geometry, as in the drag handlers.
