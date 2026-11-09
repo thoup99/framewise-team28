@@ -466,14 +466,82 @@ begin
       pragma Assert (FS.History_Line (S, FS.History_Length (S)) = "move dragged 6.24");
       Run ("undo");
 
-      --  Holding modifiers over a trim handle must retain the existing trim behavior.
-      Set_Modifiers (SDL_KMOD_SHIFT or SDL_KMOD_CTRL);
-      Timeline_View.On_Mouse_Down (V.Ptr.all, 331.0, 50.0, Left_Button);
-      pragma Assert (V.Drag_Trim_Right);
-      Timeline_View.On_Mouse_Up (V.Ptr.all, 323.0, 50.0, Left_Button);
-      Set_Modifiers (0);
-      pragma Assert (FS.History_Line (S, FS.History_Length (S)) = "trim dragged 0 1.75");
-      Run ("undo");
+      --  Trim previews and commands must use the same configured interval.
+      declare
+         procedure Trim_By
+           (Left : Boolean; Delta_Seconds, Expected_In, Expected_Out : Long_Float;
+            Interval : Framewise.Time; Modifiers : SDL_Keymod := SDL_KMOD_CTRL)
+         is
+            History : constant Natural := FS.History_Length (S);
+            Grab : constant Pixel_Type := (if Left then 271.0 else 333.0);
+            Target : constant Pixel_Type := Grab + Pixel_Type (Delta_Seconds * V.Zoom);
+         begin
+            V.Snap_Interval := Interval;
+            Set_Modifiers (Modifiers);
+            Timeline_View.On_Mouse_Down (V.Ptr.all, Grab, 50.0, Left_Button);
+            pragma Assert (V.Drag_Active and then V.Drag_Trim_Left = Left);
+            Timeline_View.On_Mouse_Move (V.Ptr.all, Target, 50.0);
+            Rebuild;
+            pragma Assert (abs (Clip_Box ("dragged").Width -
+              Pixel_Type ((Expected_Out - Expected_In) * V.Zoom)) < 0.01,
+              "Snapped trim preview uses source bounds");
+            pragma Assert (FS.History_Length (S) = History);
+            Timeline_View.On_Mouse_Up (V.Ptr.all, Target, 50.0, Left_Button);
+            Set_Modifiers (0);
+            pragma Assert (FS.History_Length (S) = History + 1);
+            pragma Assert (FS.History_Line (S, FS.History_Length (S)) =
+              "trim dragged " & FS.Image_Time (Framewise.Time (Expected_In * Long_Float (Framewise.Timebase))) &
+              " " & FS.Image_Time (Framewise.Time (Expected_Out * Long_Float (Framewise.Timebase))));
+            Rebuild;
+            pragma Assert (abs (Clip_Box ("dragged").Width -
+              Pixel_Type ((Expected_Out - Expected_In) * V.Zoom)) < 0.01);
+            Run ("undo");
+         end Trim_By;
+      begin
+         Trim_By (False, -0.26, 0.0, 1.5, Framewise.Timebase / 2);
+         Trim_By (True, 0.26, 0.5, 2.0, Framewise.Timebase / 2);
+         Trim_By (False, -0.36, 0.0, 1.75, Framewise.Timebase / 4);
+         Trim_By (True, 0.36, 0.25, 2.0, Framewise.Timebase / 4);
+         Trim_By (False, -0.26, 0.0, 1.5, Framewise.Timebase / 2, SDL_KMOD_CTRL or SDL_KMOD_SHIFT);
+         Trim_By (False, -0.26, 0.0, 1.74, Framewise.Timebase / 2, 0);
+         --  Rounding to a zero-length source window must not create an edit.
+         declare
+            History : constant Natural := FS.History_Length (S);
+         begin
+            V.Snap_Interval := Framewise.Timebase;
+            Set_Modifiers (SDL_KMOD_CTRL);
+            Timeline_View.On_Mouse_Down (V.Ptr.all, 333.0, 50.0, Left_Button);
+            Timeline_View.On_Mouse_Up (V.Ptr.all, 272.2, 50.0, Left_Button);
+            pragma Assert (FS.History_Length (S) = History);
+         end;
+      end;
+
+      --  Scrubbing is a view action and must never enter the edit history.
+      declare
+         History : constant Natural := FS.History_Length (S);
+      begin
+         V.First_Second := 2.1;
+         V.Zoom := 64.0;
+         V.Snap_Interval := Framewise.Timebase / 4;
+         Set_Modifiers (SDL_KMOD_CTRL);
+         Timeline_View.On_Mouse_Down (V.Ptr.all, 138.16, 10.0, Left_Button); --  2.54 -> 2.5.
+         pragma Assert (V.Playhead = Framewise.Timebase * 5 / 2);
+         Timeline_View.On_Mouse_Move (V.Ptr.all, 146.48, 10.0); --  2.67 -> 2.75.
+         pragma Assert (V.Playhead = Framewise.Timebase * 11 / 4);
+         Set_Modifiers (0);
+         Timeline_View.On_Key_Up (V.Ptr.all, 224, 0, False);
+         pragma Assert (V.Playhead = Framewise.Time (2.67 * Long_Float (Framewise.Timebase)));
+         Set_Modifiers (SDL_KMOD_CTRL);
+         Timeline_View.On_Key_Down (V.Ptr.all, 224, SDL_KMOD_CTRL, False);
+         pragma Assert (V.Playhead = Framewise.Timebase * 11 / 4);
+         Timeline_View.On_Mouse_Up (V.Ptr.all, 146.48, 10.0, Left_Button);
+         pragma Assert (V.Playhead = Framewise.Timebase * 11 / 4);
+         pragma Assert (FS.History_Length (S) = History);
+         Set_Modifiers (0);
+         V.Zoom := 32.0;
+         V.First_Second := 0.0;
+         V.Snap_Interval := Framewise.Timebase / 2;
+      end;
       Run ("move dragged 3.3");
       declare
          History : constant Natural := FS.History_Length (S);

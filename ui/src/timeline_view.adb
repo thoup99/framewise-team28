@@ -12,13 +12,52 @@ package body Timeline_View is
    use type Adi.SDL.Events.SDL_Keymod;
    Snap_Distance : constant Long_Float := 10.0;  --  Screen pixels, independent of zoom.
 
+   procedure Scrub_To (W : in out Track_Widget; X : Pixel_Type);
+
+   --  Use integer ticks for all interval snapping, including decimal steps.
+   function Snap_Time (W : Track_Widget; Raw : Long_Float) return Long_Float is
+   begin
+      if (W.Drag_Modifiers and Adi.SDL.Events.SDL_KMOD_CTRL) /= 0 and then W.Snap_Interval > 0 and then
+        W.Snap_Interval <= Framewise.Time'Last / 2 and then
+        Raw <= Framewise.Seconds (Framewise.Time'Last / 2)
+      then
+         --  Round in ticks so decimal intervals and halfway values stay exact.
+         declare
+            Ticks : constant Framewise.Time := Framewise.Time (Raw * Long_Float (Framewise.Timebase));
+            Remainder : constant Framewise.Time := Ticks mod W.Snap_Interval;
+            Rounded : Framewise.Time := Ticks - Remainder;
+         begin
+            if Remainder >= W.Snap_Interval - Remainder then
+               Rounded := Rounded + W.Snap_Interval;
+            end if;
+            return Framewise.Seconds (Rounded);
+         end;
+      end if;
+      return Raw;
+   end Snap_Time;
+
+   --  Trim changes source bounds while retaining the clip's timeline anchor.
+   --  Share this calculation between the drag preview and the released edit.
+   function Trim_Position (W : Track_Widget; X : Pixel_Type) return Long_Float is
+      Bound : constant Long_Float :=
+        (if W.Drag_Trim_Left then W.Drag_Src_In else W.Drag_Src_Out);
+      Raw : constant Long_Float := Bound + Long_Float (X - W.Drag_Start_X) / W.Zoom;
+   begin
+      if Raw < 0.0 then
+         return Raw;
+      end if;
+      return Snap_Time (W, Raw);
+   end Trim_Position;
+
    procedure Update_Drag_Modifiers
      (W : in out Track_Widget; Modifiers : Adi.SDL.Events.SDL_Keymod)
    is
    begin
       if W.Drag_Modifiers /= Modifiers then
          W.Drag_Modifiers := Modifiers;
-         if W.Drag_Active then
+         if W.Scrubbing then
+            Scrub_To (W, W.Drag_Current_X);
+         elsif W.Drag_Active then
             Mark_Dirty (W);
          end if;
       end if;
@@ -30,7 +69,6 @@ package body Timeline_View is
       Raw : constant Long_Float := Long_Float'Max
         (0.0, W.Drag_Start_Time + Long_Float (X - W.Drag_Start_X) / W.Zoom);
       Shift : constant Boolean := (W.Drag_Modifiers and Adi.SDL.Events.SDL_KMOD_SHIFT) /= 0;
-      Control : constant Boolean := (W.Drag_Modifiers and Adi.SDL.Events.SDL_KMOD_CTRL) /= 0;
    begin
       if Shift and then W.Read_Sequence /= null then
          declare
@@ -103,23 +141,7 @@ package body Timeline_View is
             end loop;
          end;
       end if;
-      if Control and then W.Snap_Interval > 0 and then
-        W.Snap_Interval <= Framewise.Time'Last / 2 and then
-        Raw <= Framewise.Seconds (Framewise.Time'Last / 2)
-      then
-         --  Round in ticks so decimal intervals and halfway values stay exact.
-         declare
-            Ticks : constant Framewise.Time := Framewise.Time (Raw * Long_Float (Framewise.Timebase));
-            Remainder : constant Framewise.Time := Ticks mod W.Snap_Interval;
-            Rounded : Framewise.Time := Ticks - Remainder;
-         begin
-            if Remainder >= W.Snap_Interval - Remainder then
-               Rounded := Rounded + W.Snap_Interval;
-            end if;
-            return Framewise.Seconds (Rounded);
-         end;
-      end if;
-      return Raw;
+      return Snap_Time (W, Raw);
    end Drag_Position;
 
    procedure Set_Razor_Pointer (W : in out Track_Widget;
@@ -218,9 +240,10 @@ package body Timeline_View is
       Offset : constant Pixel_Type :=
         Pixel_Type'Max (0.0, Pixel_Type'Min (X - G.X, G.Width) - Gutter);
    begin
+      W.Drag_Current_X := X;
       W.Playhead := Framewise.Time
         (Long_Float'Min (Long_Float (Framewise.Time'Last),
-         (W.First_Second + Long_Float (Offset) / W.Zoom) * Long_Float (Framewise.Timebase)));
+         Snap_Time (W, W.First_Second + Long_Float (Offset) / W.Zoom) * Long_Float (Framewise.Timebase)));
       if W.Preview_Changed /= null then
          W.Preview_Changed.all (Preview_Text (W.Read_Sequence.all, W.Playhead));
       end if;
@@ -342,21 +365,17 @@ package body Timeline_View is
                      and then To_String (W.Drag_Name) = Framewise.Image (C.N)
                   then
                      declare
-                        Delta_Seconds : constant Long_Float :=
-                           Long_Float
-                              (W.Drag_Current_X - W.Drag_Start_X) / W.Zoom;
-                        
                         Preview_Start : Long_Float := W.Drag_Start_Time;
                         Preview_In    : Long_Float := W.Drag_Src_In;
                         Preview_Out   : Long_Float := W.Drag_Src_Out;
                      begin
                         if W.Drag_Trim_Left then
                            Preview_In :=
-                              W.Drag_Src_In + Delta_Seconds;
+                              Trim_Position (W, W.Drag_Current_X);
                         
                         elsif W.Drag_Trim_Right then
                            Preview_Out :=
-                              W.Drag_Src_Out + Delta_Seconds;
+                              Trim_Position (W, W.Drag_Current_X);
 
                         else
                            Preview_Start := Drag_Position (W, W.Drag_Current_X);
@@ -580,6 +599,7 @@ package body Timeline_View is
    begin
       Set_Razor_Pointer (W, X, Y, True);
       if W.Scrubbing then
+         Update_Drag_Modifiers (W, Adi.SDL.Events.SDL_GetModState);
          Scrub_To (W, X);
       elsif W.Drag_Active then
          Update_Drag_Modifiers (W, Adi.SDL.Events.SDL_GetModState);
@@ -597,6 +617,7 @@ package body Timeline_View is
       New_Time : Long_Float;
    begin
       if Button = Left_Button and then W.Scrubbing then
+         Update_Drag_Modifiers (W, Adi.SDL.Events.SDL_GetModState);
          W.Scrubbing := False;
          Scrub_To (W, X);
          return;
@@ -621,8 +642,7 @@ package body Timeline_View is
       if W.Drag_Trim_Left then
          -- Dragging the left edge changes the source in-point.
          New_Time :=
-            W.Drag_Src_In +
-            Long_Float (X - W.Drag_Start_X) / W.Zoom;
+            Trim_Position (W, X);
 
          if New_Time < 0.0
             or else New_Time >= W.Drag_Src_Out
@@ -643,8 +663,7 @@ package body Timeline_View is
       elsif W.Drag_Trim_Right then
          --  Dragging the right edge changes the source out-point.
          New_Time :=
-           W.Drag_Src_Out +
-           Long_Float (X - W.Drag_Start_X) / W.Zoom;
+           Trim_Position (W, X);
 
          if New_Time <= W.Drag_Src_In
            or else New_Time >
