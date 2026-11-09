@@ -104,7 +104,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='framewise-ui-regression-') as work:
         directory = Path(work)
         run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i',
-             'color=c=blue:s=160x90:r=30', '-t', '3', '-c:v', 'mpeg4', str(directory / 'video.mp4')])
+             'color=c=blue:s=160x90:r=30', '-t', '3', '-c:v', 'mpeg4', str(directory / 'video clip.mp4')])
         environment = os.environ.copy()
         environment.setdefault('SDL_VIDEODRIVER', 'dummy')
         environment.setdefault('SDL_RENDER_DRIVER', 'software')

@@ -29,6 +29,8 @@ package Framewise.Session is
    subtype Response is Responses.Response;
    function Image (R : Response) return String renames Responses.Image;
 
+   function Quote_Path (File : String) return String renames Commands.Quote_Path;
+
    procedure Execute (S : in out Session; Line : String; R : out Response);
 
    ---------------------------------------------------------------------

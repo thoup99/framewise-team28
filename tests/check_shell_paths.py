@@ -17,22 +17,22 @@ def main():
     parser.add_argument('cli', type=Path)
     options = parser.parse_args()
     cli = options.cli.resolve()
-    # The document parser still splits on spaces. Keep the temporary root
-    # space-free while exercising characters that shells would interpret.
+    # Exercise both document quoting and shell quoting with the same paths.
     with tempfile.TemporaryDirectory(prefix='shell-paths-', dir=Path.cwd()) as work:
         root = Path(work)
-        folder = root / "output&cash$'folder"
+        folder = root / "output files&cash$'folder"
         folder.mkdir()
-        source = root / ("take&cash$'clip.mp4" if os.name == 'nt'
-                         else "take&cash$'back\\slash.mp4")
+        source = root / ("take 1&cash$'clip.mp4" if os.name == 'nt'
+                         else "take 1&cash$'back\\slash.mp4")
         output = folder / 'render.mp4'
-        assert ' ' not in str(root), 'Run this regression from a path without spaces'
         run('ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi',
             '-i', 'color=c=blue:s=160x90:r=30', '-t', '0.4', '-c:v', 'mpeg4', str(source))
         result = run(str(cli), '-c', 'settings 320 180 30',
-                     '-c', f'import source {source} 0.4 video', '-c', 'track v video',
+                     '-c', f'import source "{source}" 0.4 video', '-c', 'track v video',
                      '-c', 'place clip v source 0 0.4 0',
-                     '-c', f'export {output}', '-c', 'proxy source')
+                     '-c', f'export "{output}"', '-c', 'proxy source',
+                     '-c', f'save "{folder / "saved project.fw"}"',
+                     '-c', f'load "{folder / "saved project.fw"}"')
         assert 'ok exported ' in result.stdout, result.stdout
         assert 'ok wrote ' in result.stdout, result.stdout
         assert output.is_file(), 'Export must use the requested directory and filename'

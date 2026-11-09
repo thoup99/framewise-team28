@@ -160,6 +160,19 @@ procedure Tests is
       end Reject_Incomplete;
    begin
       Round_Trip ("import a a.mp4 30 video");
+      Round_Trip ("import a ""C:\media files\take 1.mp4"" 30 video");
+      Round_Trip ("import a ""C:\media files\"" 30 video");
+      Round_Trip ("save ""my projects/project 1.fw""");
+      Round_Trip ("load ""my projects/project 1.fw""");
+      Round_Trip ("plan ""output files/render 1.mp4""");
+      Round_Trip ("export ""output files/render 1.mp4""");
+      Parse ("import a ""C:\media files\take 1.mp4"" 30 video", C, Ok, Err, Last);
+      Check ("quoted path preserves Windows separators and spaces",
+             Ok and then Framewise.Image (C.File) = "C:\media files\take 1.mp4");
+      Reject_Incomplete ("import a ""unterminated.mp4 30 video");
+      Reject_Incomplete ("import a ""file.mp4""suffix 30 video");
+      Reject_Incomplete ("import a """" 30 video");
+      Reject_Incomplete ("import a a.mp4 30 video extra extra extra extra");
       Round_Trip ("track v1 video");
       Round_Trip ("place c1 v1 a 2 8.5 0");
       Round_Trip ("move c1 12.25");
@@ -243,7 +256,7 @@ procedure Tests is
       Check ("plan with no clips fails", not R.Ok);
       Execute (S, "list", R);
       Check ("list", R.Ok and Has (R, "v1()"));
-      Check ("history line", History_Line (S, 1) = "import a a.mp4 30 both");
+      Check ("history line", History_Line (S, 1) = "import a ""a.mp4"" 30 both");
       Execute (S, "proxy zz", R);
       Check ("proxy unknown source", not R.Ok and History_Length (S) = 2);
    end Test_Session;

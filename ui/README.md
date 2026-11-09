@@ -112,11 +112,12 @@ Ctrl+Shift+S Save As, Ctrl+Z Undo, and Delete to remove a selected timeline
 clip while the timeline has focus.
 
 Media, track and clip identifiers are generated automatically and checked
-against the current session. Paths currently must use letters, numbers,
-slashes, backslashes, colons, dots, dashes and underscores. The shared `.fw`
-format does not yet support quoted paths; the UI reports unsupported paths
-instead of passing malformed arguments to the session. Paths containing
-spaces are therefore not supported in this UI yet.
+against the current session. Menu actions automatically quote paths in the
+commands they generate, including imports, project saves/opens and exports.
+Spaces in paths are supported alongside letters, numbers, slashes,
+backslashes, colons, dots, dashes and underscores. The shared `.fw` format
+preserves double-quoted paths and accepts existing unquoted paths as well.
+For example: `import media1 "C:\My Videos\take 1.mp4" 30 video`.
 
 ## Library boundary
 

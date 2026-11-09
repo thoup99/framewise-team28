@@ -50,7 +50,7 @@ package body Editor_Dialogs is
             if not Valid_Path (Field (1), "Import Files") then
                return;
             end if;
-            Execute_Line ("import " & US.To_String (Form_Target) & " " & Field (1) &
+            Execute_Line ("import " & US.To_String (Form_Target) & " " & FS.Quote_Path (Field (1)) &
               " " & Field (2) & " " & Combos.Get_Selected_Text (Kind_Choice));
          when Add_Track =>
             if Field (1)'Length not in 1 .. Framewise.Max_Name or else

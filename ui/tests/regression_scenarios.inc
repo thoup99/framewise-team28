@@ -173,13 +173,13 @@
          Check_Editor_Log ("Move Clip");
          Clicked (+Place_Button);
          Check_Editor_Log ("Add Selected Media to Track");
-         Import_Selected (Files (Test_Dir & "/bad path.mp4"));
+         Import_Selected (Files (Test_Dir & "/bad;path.mp4"));
          Check_Editor_Log ("Import Files");
-         Open_Selected (Files (Test_Dir & "/bad path.fw"));
+         Open_Selected (Files (Test_Dir & "/bad;path.fw"));
          Check_Editor_Log ("Open Project");
-         Save_Selected (Files (Test_Dir & "/bad path.fw"));
+         Save_Selected (Files (Test_Dir & "/bad;path.fw"));
          Check_Editor_Log ("Save Project");
-         Export_Selected (Files (Test_Dir & "/bad path.mp4"));
+         Export_Selected (Files (Test_Dir & "/bad;path.mp4"));
          Check_Editor_Log ("Export Video");
          Check (History = Initial_History and then not Dirty and then
            not Dialogs.Is_Shown (Form) and then not Dialogs.Is_Shown (Console_Dialog),
@@ -198,12 +198,12 @@
          end;
 
          Stage ("import callback, filters and canceled import");
-         Import_Selected (Files (Test_Dir & "/video.mp4"));
+         Import_Selected (Files (Test_Dir & "/video clip.mp4"));
          Check (Dialogs.Is_Shown (Form), "Import should request duration");
          Inputs.Set_Text (Values (2), "3");
          Apply;
          Check (Reply.Ok, "Video import should succeed");
-         Check_Editor_Log ("import " & US.To_String (Form_Target) & " " & Test_Dir & "/video.mp4 3 video");
+         Check_Editor_Log ("import " & US.To_String (Form_Target) & " " & FS.Quote_Path (Test_Dir & "/video clip.mp4") & " 3 video");
          Execute_Line ("import music " & Test_Dir & "/audio.wav 3 audio");
          Check (Reply.Ok, "Audio registration");
          Execute_Line ("import combined " & Test_Dir & "/both.mp4 3 both");
@@ -333,18 +333,18 @@
          Check_Editor_Log ("settings 320 180 24");
          Export_Selected (Files (Test_Dir & "/export.mp4"));
          Check (Reply.Ok and then Ada.Directories.Exists (Test_Dir & "/export.mp4"), "Real GUI export");
-         Check_Editor_Log ("export " & Test_Dir & "/export.mp4");
+         Check_Editor_Log ("export " & FS.Quote_Path (Test_Dir & "/export.mp4"));
          Initial_History := History;
          Export_Selected (Files (Test_Dir & "/missing/export.mp4"));
          Check (not Reply.Ok, "Failed export must report failure");
-         Check_Editor_Log ("export " & Test_Dir & "/missing/export.mp4");
+         Check_Editor_Log ("export " & FS.Quote_Path (Test_Dir & "/missing/export.mp4"));
          Export_Selected (Adi.OS.Empty_Strings);
          Check (History = Initial_History, "Export/failure/cancel must not edit project");
 
          Stage ("save, save-as, cancel, dirty state and reopen");
          Save_Selected (Files (Test_Dir & "/first"));
          Check (US.To_String (Project_Path) = Test_Dir & "/first.fw", "First save adds extension");
-         Check_Editor_Log ("save " & Test_Dir & "/first.fw");
+         Check_Editor_Log ("save " & FS.Quote_Path (Test_Dir & "/first.fw"));
          Check (not Dirty, "Successful save clears dirty state");
          Save_Selected (Adi.OS.Empty_Strings);
          Check (US.To_String (Project_Path) = Test_Dir & "/first.fw", "Canceled save keeps path");
@@ -370,10 +370,10 @@
          end;
          Save_Project;
          Check (not Dirty, "Save writes to current path");
-         Check_Editor_Log ("save " & Test_Dir & "/first.fw", 2);
+         Check_Editor_Log ("save " & FS.Quote_Path (Test_Dir & "/first.fw"), 2);
          Save_Selected (Files (Test_Dir & "/gui.fw"));
          Check (US.To_String (Project_Path) = Test_Dir & "/gui.fw", "Save As changes active path");
-         Check_Editor_Log ("save " & Test_Dir & "/gui.fw");
+         Check_Editor_Log ("save " & FS.Quote_Path (Test_Dir & "/gui.fw"));
          Check (Interfaces.C.Strings.Value (Native_Title (Get_SDL_Window (W))) = "Framewise gui",
                 "Save As updates native window title");
          Execute_Line ("track Temporary audio");
@@ -492,7 +492,7 @@
             Check (Dialogs.Is_Shown (Console_Dialog), "Console button opens centered dialog");
             Check (Overlay_Count (W) = 1, "Console must block editor interaction");
             Check (Ada.Strings.Fixed.Index
-              (Adi.Widget.Text_Editor.Get_Text (Console_Output), "[Editor] load examples/cut.fw") > 0,
+              (Adi.Widget.Text_Editor.Get_Text (Console_Output), "[Editor] load " & FS.Quote_Path ("examples/cut.fw")) > 0,
               "Project opens before first console use must be recorded");
             Check (Get_Focus_Handle (W) = Widget_Handle'(+Console_Input), "Console opens ready to type");
             for I in 1 .. Item_Count (+Console_Input) loop
@@ -561,21 +561,21 @@
             Check (History = Before, "Console text shortcuts must not undo project edits");
 
             Inputs.Set_Text (Console_Input, "");
-            Command ("save " & Test_Dir & "/console.fw");
+            Command ("save " & FS.Quote_Path (Test_Dir & "/console project.fw"));
             Check (Reply.Ok and then not Dirty, "Console save clears dirty state");
-            Check (US.To_String (Project_Path) = Test_Dir & "/console.fw", "Console save updates project path");
-            Command ("save " & Test_Dir & "/missing/console.fw");
+            Check (US.To_String (Project_Path) = Test_Dir & "/console project.fw", "Console save updates project path");
+            Command ("save " & FS.Quote_Path (Test_Dir & "/missing/console project.fw"));
             Check (not Reply.Ok and then not Dirty and then
-              US.To_String (Project_Path) = Test_Dir & "/console.fw",
+              US.To_String (Project_Path) = Test_Dir & "/console project.fw",
               "Failed console save must preserve current document bookkeeping");
             Command ("load " & Test_Dir & "/missing.fw");
             Check (not Reply.Ok and then not Dirty and then History = Before,
                    "Missing console load preserves project and saved state");
             Command ("track extra audio");
             Check (Reply.Ok and then Dirty, "Edit after save marks project dirty");
-            Command ("load " & Test_Dir & "/console.fw");
+            Command ("load " & FS.Quote_Path (Test_Dir & "/console project.fw"));
             Check (Reply.Ok and then not Dirty and then History = Before, "Console load restores saved document");
-            Check (Interfaces.C.Strings.Value (Native_Title (Get_SDL_Window (W))) = "Framewise console",
+            Check (Interfaces.C.Strings.Value (Native_Title (Get_SDL_Window (W))) = "Framewise console project",
                    "Console load updates native title");
             Command ("undo");
             Check (Reply.Ok and then Dirty, "Console undo refreshes dirty state");
@@ -660,7 +660,7 @@
               "Rejected editor edits include their error response");
             Save_Selected (Files (Test_Dir & "/observed.fw"));
             Check (Reply.Ok and then Ada.Strings.Fixed.Count
-              (Adi.Widget.Text_Editor.Get_Text (Console_Output), "[Editor] save " & Test_Dir & "/observed.fw") = 1,
+              (Adi.Widget.Text_Editor.Get_Text (Console_Output), "[Editor] save " & FS.Quote_Path (Test_Dir & "/observed.fw")) = 1,
               "Editor saves are logged once");
             Inputs.Set_Text (Console_Input, "draft");
             Before := US.To_Unbounded_String (Adi.Widget.Text_Editor.Get_Text (Console_Output));
@@ -700,8 +700,8 @@
             declare
                Recorded : constant String := Adi.Widget.Text_Editor.Get_Text (Console_Output);
             begin
-               Check (Ada.Strings.Fixed.Count (Recorded, "[Editor] load examples/cut.fw") =
-                 Ada.Strings.Fixed.Count (US.To_String (Before), "[Editor] load examples/cut.fw") + 1,
+               Check (Ada.Strings.Fixed.Count (Recorded, "[Editor] load " & FS.Quote_Path ("examples/cut.fw")) =
+                 Ada.Strings.Fixed.Count (US.To_String (Before), "[Editor] load " & FS.Quote_Path ("examples/cut.fw")) + 1,
                  "Open Project recorded exactly once");
                Check (Ada.Strings.Fixed.Count (Recorded, "[Editor] delete c1") =
                  Ada.Strings.Fixed.Count (US.To_String (Before), "[Editor] delete c1") + 1,

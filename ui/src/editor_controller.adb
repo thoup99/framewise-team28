@@ -215,7 +215,7 @@ package body Editor_Controller is
    function Safe_Path (Text : String) return Boolean is
      (Text'Length > 0 and then Text'Length <= 240 and then
       (for all C of Text => C in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' |
-        '/' | '\' | ':' | '.' | '_' | '-'));
+        '/' | '\' | ':' | '.' | '_' | '-' | ' '));
 
    function Valid_Path (Text, Action : String) return Boolean is
    begin
@@ -223,7 +223,7 @@ package body Editor_Controller is
          return True;
       end if;
       Report_Editor_Error (Action,
-        "Choose a path using letters, numbers, dots, dashes or underscores; spaces are not supported yet.");
+        "Choose a path using letters, numbers, spaces, dots, dashes or underscores.");
       return False;
    end Valid_Path;
 
@@ -265,7 +265,7 @@ package body Editor_Controller is
          if not Valid_Path (Path, "Save Project") then
             return;
          end if;
-         Execute_Line ("save " & Path);
+         Execute_Line ("save " & FS.Quote_Path (Path));
          if Reply.Ok then
             Project_Path := US.To_Unbounded_String (Path);
             Saved_History := History;
@@ -281,7 +281,7 @@ package body Editor_Controller is
          Adi.OS.Show_Save_File_Dialog (Save_Selected'Access, W,
            Default_Location => (if US.Length (Project_Path) = 0 then "project.fw" else US.To_String (Project_Path)));
       else
-         Execute_Line ("save " & US.To_String (Project_Path));
+         Execute_Line ("save " & FS.Quote_Path (US.To_String (Project_Path)));
          if Reply.Ok then
             Saved_History := History;
             Update_Title;
@@ -315,7 +315,7 @@ package body Editor_Controller is
       if not Valid_Path (US.To_String (Files (Files'First)), "Open Project") then
          return;
       end if;
-      Execute_Line ("load " & US.To_String (Files (Files'First)));
+      Execute_Line ("load " & FS.Quote_Path (US.To_String (Files (Files'First))));
       --  Load can fail after replaying part of a file; retain the dirty marker.
       if Reply.Ok then
          Project_Path := Files (Files'First);
@@ -354,7 +354,15 @@ package body Editor_Controller is
            (Line (Line'First .. Separator - 1));
       begin
          if Verb in "save" | "load" then
-            Project_Path := US.To_Unbounded_String (Line (Path_First .. Line'Last));
+            declare
+               Raw : constant String := Ada.Strings.Fixed.Trim
+                 (Line (Path_First .. Line'Last), Ada.Strings.Both);
+            begin
+               --  Store the filename, not its command-language delimiters.
+               Project_Path := US.To_Unbounded_String
+                 ((if Raw'Length >= 2 and then Raw (Raw'First) = '"'
+                   then Raw (Raw'First + 1 .. Raw'Last - 1) else Raw));
+            end;
             Saved_History := History;
             if Verb = "load" then
                Reset_View;
@@ -424,7 +432,7 @@ package body Editor_Controller is
    procedure Export_Selected (Files : Adi.OS.String_Array) is
    begin
       if Files'Length > 0 and then Valid_Path (US.To_String (Files (Files'First)), "Export Video") then
-         Execute_Line ("export " & US.To_String (Files (Files'First)));
+         Execute_Line ("export " & FS.Quote_Path (US.To_String (Files (Files'First))));
          if Reply.Ok then
             Tell ("Video exported.");
          end if;
