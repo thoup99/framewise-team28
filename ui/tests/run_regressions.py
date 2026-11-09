@@ -36,6 +36,7 @@ with Editor_Styles; use Editor_Styles;
 with Editor_Controller; use Editor_Controller;
 with Editor_Dialogs; use Editor_Dialogs;
 with Editor_Application;
+with Editor_Tooltips;
 
 procedure Framewise_UI_Regression is
    use type Buttons.Button_Handle;

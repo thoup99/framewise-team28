@@ -13,6 +13,7 @@ with Editor_Widgets; use Editor_Widgets;
 with Editor_Controller; use Editor_Controller;
 with Editor_Dialogs;
 with Editor_Console;
+with Editor_Tooltips;
 
 package body Editor_Layout is
    use type Buttons.Button_Handle;
@@ -332,6 +333,10 @@ package body Editor_Layout is
       Connect_Context_Menu (+Tracks, Show_Clip_Menu'Access);
       Connect_Key_Down (W, Key_Down'Access);
       Connect_Close_Request (W, Close_Requested'Access);
+      Editor_Tooltips.Register (+Start_Button, "Go to the beginning (Home).");
+      Editor_Tooltips.Register (+Play_Button, "Playback is not available yet.");
+      Editor_Tooltips.Register (+End_Button, "Go to the project end (End).");
       Set_Root (W, +Root);
+      Editor_Tooltips.Build;
    end Build;
 end Editor_Layout;

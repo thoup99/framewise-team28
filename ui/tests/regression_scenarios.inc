@@ -60,6 +60,21 @@
          Assert_Centered;
          Check (Get_Scroll_Max_Offset_Y (+Track_Scroll) = 0.0, "Empty timeline must not overflow");
 
+         Stage ("timeline shortcuts and button descriptions");
+         Check (Ada.Strings.Fixed.Index (Editor_Tooltips.Hint_For (+Razor_Button), "(R)") > 0,
+                "Razor tooltip documents shortcut");
+         Set_Focus (W, +Tracks);
+         Adi.Window.On_Key_Down (W, 21, 0, 0, False);
+         Check (Has_State (+Razor_Button, State_Selected), "R toggles Razor");
+         Adi.Window.On_Key_Down (W, 21, 0, 0, False);
+         Adi.Window.On_Key_Down (W, Adi.SDL.Events.SDL_SCANCODE_RIGHT, 0, 0, False);
+         declare
+            V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+         begin
+            Check (V.Playhead = Framewise.Timebase / 30, "Arrow advances one project frame");
+         end;
+         Adi.Window.On_Key_Down (W, Adi.SDL.Events.SDL_SCANCODE_HOME, 0, 0, False);
+
          Stage ("File menu clears a previously selected row when reopened");
          Clicked (+File_Button);
          Render (W);

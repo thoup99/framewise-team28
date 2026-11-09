@@ -689,6 +689,31 @@ package body Editor_Controller is
          Execute_Line ("undo");
       elsif Scancode = Adi.SDL.Events.SDL_SCANCODE_DELETE and then Get_Focus_Handle (W) = Widget_Handle'(+Tracks) then
          Delete_Selected;
+      elsif not Ctrl and then Get_Focus_Handle (W) = Widget_Handle'(+Tracks) then
+         if Scancode = 21 then
+            Clicked (+Razor_Button);
+         elsif Scancode = Adi.SDL.Events.SDL_SCANCODE_HOME then
+            Clicked (+Start_Button);
+         elsif Scancode = Adi.SDL.Events.SDL_SCANCODE_END then
+            Clicked (+End_Button);
+         elsif Scancode in Adi.SDL.Events.SDL_SCANCODE_LEFT | Adi.SDL.Events.SDL_SCANCODE_RIGHT then
+            declare
+               V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+               Step : constant Framewise.Time :=
+                 (if (Key_Mod and Adi.SDL.Events.SDL_KMOD_SHIFT) /= 0 then Framewise.Timebase
+                  else Framewise.Time'Max (1, Framewise.Timebase / Framewise.Time (FS.Settings_Of (Editor).FPS)));
+            begin
+               if Scancode = Adi.SDL.Events.SDL_SCANCODE_LEFT then
+                  V.Playhead := V.Playhead - Framewise.Time'Min (V.Playhead, Step);
+               else
+                  V.Playhead := V.Playhead + Framewise.Time'Min (Step, Framewise.Time'Last / 2 - V.Playhead);
+               end if;
+               Show_Preview (Timeline_View.Preview_Text (Read_Sequence, V.Playhead));
+               Mark_Dirty (+Tracks);
+            end;
+         else
+            return;
+         end if;
       else
          return;
       end if;

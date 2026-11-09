@@ -4,6 +4,7 @@ with Adi.Widget_Styles; use Adi.Widget_Styles;
 with Editor_Context; use Editor_Context;
 with Editor_Styles; use Editor_Styles;
 with Editor_Controller;
+with Editor_Tooltips;
 
 package body Editor_Widgets is
    use type Buttons.Button_Handle;
@@ -21,6 +22,14 @@ package body Editor_Widgets is
       H : constant Buttons.Button_Handle := Buttons.Create_Handle (Text);
    begin
       Style_Button (H);
+      Editor_Tooltips.Register (+H,
+        (if Text = "Razor" then "Razor (R): split a clip at the pointer."
+         elsif Text = "Undo" then "Undo the last edit (Ctrl+Z)."
+         elsif Text = "Delete Clip" then "Delete the selected clip (Delete)."
+         elsif Text = "File" then "Project actions: Ctrl+N, Ctrl+O, Ctrl+S, Ctrl+Shift+S."
+         elsif Text = "Earlier" then "Scroll the visible timeline five seconds earlier."
+         elsif Text = "Later" then "Scroll the visible timeline five seconds later."
+         else Text));
       Buttons.Connect_Clicked (H, Editor_Controller.Clicked'Access);
       Add_Child (Parent, +H);
       return H;
