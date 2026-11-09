@@ -289,13 +289,11 @@ package body Editor_Layout is
       Status := Make_Label (+Root, "Ready. Import files and add a track, or open a .fw project.");
    end Arrange_Panels;
 
-   procedure Build_File_Menu is
+   procedure Style_Menu (Menu : Menus.Menu_Handle) is
    begin
-      File_Menu := Menus.Create_Handle;
-      Menus.Attach_Window (File_Menu, W);
-      Menus.Set_Menu_Part_Styles (File_Menu,
+      Menus.Set_Menu_Part_Styles (Menu,
         (Main_Part => (Style => Style.Base (Floating_Panel_Style).Build, Enabled => True), others => <>));
-      Menus.Set_Item_Part_Styles (File_Menu,
+      Menus.Set_Item_Part_Styles (Menu,
         (Main_Part =>
            (Style => Style.Base
               ((Padding => Set (CSS_Box (Px (6.0), Px (8.0))), others => <>))
@@ -306,6 +304,13 @@ package body Editor_Layout is
             Enabled => True),
          Label_Part => (Style => Style.Base (Text_Style).Build, Enabled => True),
          others => <>));
+   end Style_Menu;
+
+   procedure Build_File_Menu is
+   begin
+      File_Menu := Menus.Create_Handle;
+      Menus.Attach_Window (File_Menu, W);
+      Style_Menu (File_Menu);
       Reset_File_Menu;
    end Build_File_Menu;
 
@@ -320,6 +325,11 @@ package body Editor_Layout is
       Editor_Console.Build;
       Build_File_Menu;
       Menus.Connect_Item_Selected (File_Menu, Menu_Selected'Access);
+      Clip_Menu := Menus.Create_Handle;
+      Menus.Attach_Window (Clip_Menu, W);
+      Style_Menu (Clip_Menu);
+      Menus.Connect_Item_Selected (Clip_Menu, Clip_Menu_Selected'Access);
+      Connect_Context_Menu (+Tracks, Show_Clip_Menu'Access);
       Connect_Key_Down (W, Key_Down'Access);
       Connect_Close_Request (W, Close_Requested'Access);
       Set_Root (W, +Root);

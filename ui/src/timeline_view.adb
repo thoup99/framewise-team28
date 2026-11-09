@@ -164,6 +164,40 @@ package body Timeline_View is
       end if;
    end Set_Razor_Pointer;
 
+   function Clip_At (W : Track_Widget; X, Y : Pixel_Type) return String is
+      G : constant Rectangle := Get_Geometry (W);
+      Left : constant Pixel_Type := G.X + Gutter;
+      Right : constant Pixel_Type := G.X + G.Width;
+      Row : Pixel_Type := G.Y + Ruler_Height;
+   begin
+      if W.Read_Sequence = null or else W.Zoom <= 0.0 or else
+        X < Left or else X > Right or else Y < Row or else Y > G.Y + G.Height
+      then
+         return "";
+      end if;
+      for Track of W.Read_Sequence.all.Tracks loop
+         if Track.Used then
+            if Y >= Row + 4.0 and then Y <= Row + 40.0 then
+               for I in 1 .. Track.Count loop
+                  declare
+                     C renames Track.Clips (I);
+                     X1 : constant Pixel_Type := Left + Pixel_Type
+                       ((Framewise.Seconds (C.Start) - W.First_Second) * W.Zoom);
+                     X2 : constant Pixel_Type := X1 + Pixel_Type
+                       (Framewise.Seconds (C.Src_Out - C.Src_In) * W.Zoom);
+                  begin
+                     if X >= Pixel_Type'Max (Left, X1) and then X <= Pixel_Type'Min (Right, X2) then
+                        return Framewise.Image (C.N);
+                     end if;
+                  end;
+               end loop;
+            end if;
+            Row := Row + 48.0;
+         end if;
+      end loop;
+      return "";
+   end Clip_At;
+
    function Cursor_At (W : Track_Widget; X, Y : Pixel_Type)
       return Adi.SDL.Mouse.SDL_SystemCursor
    is

@@ -38,7 +38,8 @@ package Editor_Context is
    Snap_Interval_Input : Inputs.Text_Input_Handle;
    Sources : Adi.Widget.Text_Editor.Text_Editor_Handle;
    Source_Choice, Track_Choice, Kind_Choice : Combos.Combo_Box_Handle;
-   File_Menu : Menus.Menu_Handle;
+   File_Menu, Clip_Menu : Menus.Menu_Handle;
+   Clip_Menu_Target : US.Unbounded_String;
    Form, Confirm : Dialogs.Dialog_Handle;
    Form_Content : Boxes.Box_Handle;
 

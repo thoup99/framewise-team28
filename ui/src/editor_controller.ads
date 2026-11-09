@@ -1,3 +1,4 @@
+with Adi.Core;
 with Adi.Widget; use Adi.Widget;
 with Adi.Window; use Adi.Window;
 with Adi.OS;
@@ -51,6 +52,10 @@ package Editor_Controller is
    procedure Clip_Selected (Name : String);
 
    procedure Clicked (Button : Widget_Handle);
+
+   procedure Show_Clip_Menu (Widget : Widget_Handle; X, Y : Adi.Core.Pixel_Type);
+
+   procedure Clip_Menu_Selected (Menu : Menus.Menu_Handle; Index : Positive; Text : String);
 
    procedure Menu_Selected (Menu : Menus.Menu_Handle; Index : Positive; Text : String);
 

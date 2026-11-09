@@ -43,6 +43,8 @@ package Timeline_View is
 
    procedure Set_Razor_Pointer (W : in out Track_Widget;
       X, Y : Adi.Core.Pixel_Type; Active : Boolean);
+   --  Coordinates use widget geometry, as in the drag handlers.
+   function Clip_At (W : Track_Widget; X, Y : Adi.Core.Pixel_Type) return String;
    function Cursor_At (W : Track_Widget; X, Y : Adi.Core.Pixel_Type)
       return Adi.SDL.Mouse.SDL_SystemCursor;
    function Preview_Text

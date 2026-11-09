@@ -751,6 +751,89 @@
             Adi.Window.On_Key_Down (W, Adi.SDL.Events.SDL_SCANCODE_ESCAPE, 0, 0, False);
             Check (not Dialogs.Is_Shown (Console_Dialog), "Escape dismisses console");
 
+            Stage ("clip context menu snaps the cursor without editing the document");
+            Open_Selected (Files ("examples/cut.fw"));
+            Render (W);
+            declare
+               V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+               Initial_History : constant US.Unbounded_String := History;
+               Transcript : constant String := Adi.Widget.Text_Editor.Get_Text (Console_Output);
+
+               procedure Choose_Edge (Time : Long_Float; Row : Pixel_Type;
+                                      Index : Positive; Expected : Framewise.Time) is
+                  G : constant Rectangle := Geometry_In_Window (+Tracks);
+                  X : constant Pixel_Type := G.X + 110.0 + Pixel_Type ((Time - V.First_Second) * V.Zoom);
+                  Y : constant Pixel_Type := G.Y + Row;
+               begin
+                  Adi.Window.On_Mouse_Down (W, X, Y, Right_Button);
+                  Adi.Window.On_Mouse_Up (W, X, Y, Right_Button);
+                  Render (W);
+                  Check (Menus.Is_Shown (Clip_Menu), "Right-clicking a clip opens its menu");
+                  Check (not V.Drag_Active and then not V.Scrubbing, "Context menu must not start a drag");
+                  declare
+                     Popup : constant Widget_Handle := Get_Overlay_Handle (W, Overlay_Count (W));
+                     Item : constant Widget_Handle := Get_Child_Handle (Popup, Index);
+                     R : constant Rectangle := Geometry_In_Window (Item);
+                  begin
+                     Check (Child_Count (Popup) = 2, "Clip menu offers only two actions");
+                     Check (Get_Resolved_Part_Style (Popup, Main_Part).Border_Width = Border_Width (Px (1.0)),
+                            "Clip menu has a visible border");
+                     Check (not Has_State (Item, State_Selected), "Clip menu clears old selection");
+                     Adi.Window.On_Mouse_Move (W, R.X + 10.0, R.Y + R.Height / 2.0);
+                     Render (W);
+                     Check (Get_Resolved_Part_Style (Item, Main_Part).Background_Color = RGB (45, 78, 119),
+                            "Clip menu action highlights on hover");
+                     Adi.Window.On_Mouse_Down (W, R.X + 10.0, R.Y + R.Height / 2.0, Left_Button);
+                     Adi.Window.On_Mouse_Up (W, R.X + 10.0, R.Y + R.Height / 2.0, Left_Button);
+                  end;
+                  Render (W);
+                  Check (not Menus.Is_Shown (Clip_Menu), "Choosing an edge closes the menu");
+                  Check (V.Playhead = Expected, "Cursor snaps to the clicked clip's exact edge");
+                  Check (Ada.Strings.Fixed.Index (Labels.Get_Text (Preview), FS.Image_Time (Expected) & " s") > 0,
+                         "Cursor action refreshes the preview position");
+                  Check (History = Initial_History, "Cursor action does not edit document history");
+                  Check (Adi.Widget.Text_Editor.Get_Text (Console_Output) = Transcript,
+                         "Cursor action does not log an editor command");
+               end Choose_Edge;
+            begin
+               V.Selected_Clip := US.To_Unbounded_String ("c1");
+               Choose_Edge (10.0, 50.0, 1, Framewise.Time (8.5 * Long_Float (Framewise.Timebase)));
+               Choose_Edge (10.0, 50.0, 2, Framewise.Time (13.5 * Long_Float (Framewise.Timebase)));
+               --  Source in-point is 2 seconds, but c1's timeline begins at zero.
+               Choose_Edge (3.0, 50.0, 1, 0);
+               Choose_Edge (3.0, 50.0, 2, Framewise.Time (6.5 * Long_Float (Framewise.Timebase)));
+               V.Razor_Mode := True;
+               Choose_Edge (3.0, 98.0, 2, 22 * Framewise.Timebase);
+               V.Razor_Mode := False;
+               declare
+                  G : constant Rectangle := Geometry_In_Window (+Tracks);
+               begin
+                  Adi.Window.On_Mouse_Down (W, G.X + 120.0, G.Y + 10.0, Right_Button);
+                  Check (not Menus.Is_Shown (Clip_Menu), "Ruler has no clip context menu");
+                  Adi.Window.On_Mouse_Down (W, G.X + 20.0, G.Y + 50.0, Right_Button);
+                  Check (not Menus.Is_Shown (Clip_Menu), "Track label has no clip context menu");
+                  Adi.Window.On_Mouse_Down (W, G.X + 110.0 + 7.0 * Pixel_Type (V.Zoom), G.Y + 50.0, Right_Button);
+                  Check (not Menus.Is_Shown (Clip_Menu), "Empty timeline gap has no clip context menu");
+               end;
+               --  Make room to scroll the audio row upward; hit testing must
+               --  still use the row shown under the pointer in the viewport.
+               for I in 1 .. 6 loop
+                  Execute_Line ("track context" & Ada.Strings.Fixed.Trim (I'Image, Ada.Strings.Both));
+               end loop;
+               Render (W);
+               Set_Scroll_Offset_Y (+Track_Scroll, 48.0);
+               Render (W);
+            end;
+            declare
+               G : constant Rectangle := Geometry_In_Window (+Tracks);
+            begin
+               Adi.Window.On_Mouse_Down (W, G.X + 110.0 + 3.0 * 32.0, G.Y + 98.0, Right_Button);
+               Render (W);
+               Check (Menus.Is_Shown (Clip_Menu) and then US.To_String (Clip_Menu_Target) = "m1",
+                      "Scrolled clip context menu targets the visible audio clip");
+               Menus.Hide (Clip_Menu);
+            end;
+
             Stage ("released timeline gestures use the same editor log");
             Open_Selected (Files ("examples/cut.fw"));
             Render (W);

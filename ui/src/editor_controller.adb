@@ -577,6 +577,52 @@ package body Editor_Controller is
       Menus.Add_Item (File_Menu, "Exit");
    end Reset_File_Menu;
 
+   procedure Show_Clip_Menu (Widget : Widget_Handle; X, Y : Pixel_Type) is
+      V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+      Local : constant Rectangle := Get_Geometry (Widget);
+      Visible : constant Rectangle := Geometry_In_Window (Widget);
+      --  Context-menu events arrive in window coordinates. Account for the
+      --  timeline's scroll offset before looking up the clip under the mouse.
+      Name : constant String := Timeline_View.Clip_At
+        (V.Ptr.all, X + Local.X - Visible.X, Y + Local.Y - Visible.Y);
+   begin
+      Menus.Hide (Clip_Menu);
+      Clip_Menu_Target := US.To_Unbounded_String (Name);
+      if Name = "" then
+         return;
+      end if;
+      --  Rebuilding clears a previous action's retained menu highlight.
+      Menus.Clear_Items (Clip_Menu);
+      Menus.Add_Item (Clip_Menu, "Snap Timeline Cursor Left");
+      Menus.Add_Item (Clip_Menu, "Snap Timeline Cursor Right");
+      Menus.Show_At (Clip_Menu, X, Y, 250.0);
+   end Show_Clip_Menu;
+
+   procedure Clip_Menu_Selected (Menu : Menus.Menu_Handle; Index : Positive; Text : String) is
+      pragma Unreferenced (Menu, Text);
+      Seq : constant FS.Sequence_View := Read_Sequence;
+      V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+   begin
+      --  Resolve the named clip again in case the document changed while the
+      --  menu was open. Cursor navigation does not create an edit or log entry.
+      for Track of Seq.Tracks loop
+         if Track.Used then
+            for I in 1 .. Track.Count loop
+               declare
+                  C renames Track.Clips (I);
+               begin
+                  if Framewise.Image (C.N) = US.To_String (Clip_Menu_Target) then
+                     V.Playhead := C.Start + (if Index = 2 then C.Src_Out - C.Src_In else 0);
+                     Show_Preview (Timeline_View.Preview_Text (Seq, V.Playhead));
+                     Mark_Dirty (V.Ptr.all);
+                     return;
+                  end if;
+               end;
+            end loop;
+         end if;
+      end loop;
+   end Clip_Menu_Selected;
+
    procedure Menu_Selected (Menu : Menus.Menu_Handle; Index : Positive; Text : String) is
       pragma Unreferenced (Menu, Text);
    begin

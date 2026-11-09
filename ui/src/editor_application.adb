@@ -47,6 +47,7 @@ package body Editor_Application is
    procedure Shutdown is
    begin
       Editor_Cursors.Release;
+      Menus.Destroy (Clip_Menu);
       Menus.Destroy (File_Menu);
       Adi.Window.Destroy (W);
    end Shutdown;
