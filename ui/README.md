@@ -46,7 +46,7 @@ A green guide and time label identify the target while a clip is snapped;
 the guide disappears on release. Control also snaps trim points and ruler
 scrubbing using the configured interval.
 
-The **Cursor (s)** field below the preview lets you jump to an exact time.
+The **Timeline Cursor (s)** field after **Snap (s)** in the timeline toolbar lets you jump to an exact time.
 Invalid values are marked red and keep the last valid cursor position.
 Hover over buttons for descriptions and keyboard shortcuts.
 

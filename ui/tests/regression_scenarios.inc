@@ -161,6 +161,10 @@
                    "Later remains the last navigation button");
             Check (Get_Child_Handle (+Timeline_Tools, 11) = Widget_Handle'(+Snap_Interval_Input),
                    "Snap input follows Later and its label");
+            Check (Get_Child_Handle (+Timeline_Tools, 13) = Widget_Handle'(+Cursor_Time_Input),
+                   "Timeline cursor field follows the snap section");
+            Check (Labels.Get_Text (Labels.Try_As_Label (Get_Child_Handle (+Timeline_Tools, 12))) =
+              "Timeline Cursor (s)", "Timeline cursor label");
             Check (Inputs.Get_Text (Snap_Interval_Input) = "0.5" and then
               V.Snap_Interval = Framewise.Timebase / 2, "Default snap interval is half a second");
             Check (not Is_Visible (+Tool_Status) and then Labels.Get_Text (Tool_Status) = "",
@@ -827,9 +831,17 @@
                Initial_History : constant US.Unbounded_String := History;
                Transcript : constant String := Adi.Widget.Text_Editor.Get_Text (Console_Output);
 
+               function Reveal_Row (Row : Pixel_Type) return Rectangle is
+                  View : constant Rectangle := Geometry_In_Window (+Track_Scroll);
+               begin
+                  Set_Scroll_Offset_Y (+Track_Scroll, Pixel_Type'Max (0.0, Row - View.Height / 2.0));
+                  Render (W);
+                  return Geometry_In_Window (+Tracks);
+               end Reveal_Row;
+
                procedure Choose_Edge (Time : Long_Float; Row : Pixel_Type;
                                       Index : Positive; Expected : Framewise.Time) is
-                  G : constant Rectangle := Geometry_In_Window (+Tracks);
+                  G : constant Rectangle := Reveal_Row (Row);
                   X : constant Pixel_Type := G.X + 110.0 + Pixel_Type ((Time - V.First_Second) * V.Zoom);
                   Y : constant Pixel_Type := G.Y + Row;
                begin
@@ -873,6 +885,8 @@
                V.Razor_Mode := True;
                Choose_Edge (3.0, 98.0, 2, 22 * Framewise.Timebase);
                V.Razor_Mode := False;
+               Set_Scroll_Offset_Y (+Track_Scroll, 0.0);
+               Render (W);
                declare
                   G : constant Rectangle := Geometry_In_Window (+Tracks);
                begin
