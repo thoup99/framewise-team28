@@ -9,5 +9,6 @@ package Editor_Export is
    function Is_Busy return Boolean;
    function Is_Open return Boolean;
    function Details return String;
+   function Progress_Percent return Natural;
    procedure Close;
 end Editor_Export;

@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 
 
@@ -41,6 +42,43 @@ def main():
         if options.jobs:
             jobs = run(str(options.jobs.resolve()), str(source), str(folder / 'job'))
             print(jobs.stdout.strip())
+            # Deterministic progress exercises partial writes, malformed values,
+            # regressions, and progress=end arriving before the child exits.
+            mock = root / 'mock-bin'
+            mock.mkdir()
+            script = mock / 'fake_ffmpeg.py'
+            script.write_text(r"""import sys, time
+from pathlib import Path
+args = sys.argv[1:]
+progress = Path(args[args.index('-progress') + 1])
+with progress.open('w', newline='') as stream:
+    stream.write('out_time_us=N/A\n' + 'out_time_us=-1\n' + 'out_time_us=200')
+    stream.flush()
+    time.sleep(0.08)
+    stream.write('000\r\nprogress=continue\n')
+    stream.flush()
+    time.sleep(0.25)
+    stream.write('out_time_us=100000\n' + 'out_time_us=' + '9' * 200 + '\n')
+    stream.write('out_time_us=400000\nprogress=end\n')
+    stream.flush()
+    time.sleep(0.25)
+try:
+    Path(args[-1]).write_bytes(b'test export')
+except OSError as error:
+    print(error, file=sys.stderr)
+    sys.exit(1)
+""")
+            if os.name == 'nt':
+                (mock / 'ffmpeg.cmd').write_text(f'@"{sys.executable}" "{script}" %*\n')
+            else:
+                launcher = mock / 'ffmpeg'
+                launcher.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{script}" "$@"\n')
+                launcher.chmod(0o755)
+            environment = os.environ.copy()
+            environment['PATH'] = str(mock) + os.pathsep + environment.get('PATH', '')
+            environment['FRAMEWISE_EXPECT_PROGRESS'] = '1'
+            subprocess.run([str(options.jobs.resolve()), str(source), str(folder / 'mock_job')],
+                           env=environment, check=True, timeout=60)
         probe = json.loads(run('ffprobe', '-v', 'error', '-show_entries',
                                'format=duration:stream=width,height', '-of', 'json',
                                str(output)).stdout)

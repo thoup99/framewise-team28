@@ -1,3 +1,4 @@
+with Ada.Strings.Fixed;
 with Adi.Core; use Adi.Core;
 with Adi.CSS_Styles; use Adi.CSS_Styles;
 with Adi.Widget; use Adi.Widget;
@@ -11,6 +12,7 @@ with Editor_Styles; use Editor_Styles;
 
 package body Editor_Export is
    use type Boxes.Box_Handle;
+   use type Labels.Label_Handle;
    use type Buttons.Button_Handle;
    use type Inputs.Text_Input_Handle;
    use type Adi.Widget.Text_Editor.Text_Editor_Handle;
@@ -18,12 +20,31 @@ package body Editor_Export is
    Job : FS.Export_Job;
    Dialog : Dialogs.Dialog_Handle;
    Output : Adi.Widget.Text_Editor.Text_Editor_Handle;
+   Progress_Track, Progress_Fill : Boxes.Box_Handle;
+   Progress_Label : Labels.Label_Handle;
+   Displayed : Integer := -1;
    Log_Line : US.Unbounded_String;
    Log_Origin : Editor_Console.Command_Origin;
 
    function Is_Busy return Boolean is (FS.Export_Running (Job));
    function Is_Open return Boolean is (Dialogs.Is_Shown (Dialog));
    function Details return String is (Adi.Widget.Text_Editor.Get_Text (Output));
+
+   function Progress_Percent return Natural is (Natural'Max (0, Displayed));
+
+   procedure Show_Progress is
+      Value : constant Natural := FS.Export_Percent (Job);
+   begin
+      if Displayed = Value then
+         return;
+      end if;
+      Displayed := Value;
+      Labels.Set_Text (Progress_Label, Ada.Strings.Fixed.Trim (Value'Image, Ada.Strings.Both) & "%");
+      Set_Part_Style (+Progress_Fill, Main_Part, Style.Base
+        ((Width => Set (Size (Pct (Float (Value)))), Height => Set (Size (Px (18.0))),
+          Flex_Shrink => Set (0.0), Background_Color => Set_Bg (RGB (52, 112, 204)),
+          Border_Radius => Set (Radius (Px (3.0))), others => <>)).Build);
+   end Show_Progress;
 
    procedure Close is
    begin
@@ -51,11 +72,13 @@ package body Editor_Export is
         ((if Command'Length > 0 then Command else "export " & FS.Quote_Path (Path)));
       Log_Origin := Origin;
       FS.Start_Export (Editor, Path, Job, Reply);
+      Displayed := -1;
+      Show_Progress;
       Set_State (+Dialogs.Get_Button_Handle (Dialog, 1), State_Disabled, Is_Busy);
       Dialogs.Set_Title (Dialog, (if Is_Busy then "Exporting..." else "Export failed"));
       Adi.Widget.Text_Editor.Set_Text (Output,
         (if Is_Busy then "Exporting to:" & ASCII.LF & Path & ASCII.LF & ASCII.LF &
-          "Please wait. This window will update when FFmpeg finishes."
+          "The progress bar follows the video processed by FFmpeg."
          else FS.Image (Reply)));
       Dialogs.Show (Dialog);
       Set_Focus (W, +Output);
@@ -74,6 +97,7 @@ package body Editor_Export is
          return;
       end if;
       FS.Poll_Export (Job, R, Finished);
+      Show_Progress;
       if Finished then
          Reply := R;
          Dialogs.Set_Title (Dialog, (if R.Ok then "Export complete" else "Export failed"));
@@ -86,6 +110,7 @@ package body Editor_Export is
    end Poll;
 
    procedure Build is
+      Content : constant Boxes.Box_Handle := Boxes.Create_Handle;
    begin
       Dialog := Dialogs.Create_Handle;
       Dialogs.Attach_Window (Dialog, W);
@@ -101,6 +126,21 @@ package body Editor_Export is
       Dialogs.Set_Title_Style (Dialog,
         (Label_Part => (Style => Style.Base (Text_Style).Build, Enabled => True), others => <>));
       Style_Button (Dialogs.Get_Button_Handle (Dialog, 1));
+      Set_Part_Style (+Content, Main_Part, Style.Base
+        ((Display => Set (Flex), Flex_Direction => Set (Column), Gap => Set (Gap (Px (8.0))),
+          others => <>)).Build);
+      Progress_Label := Labels.Create_Handle ("0%");
+      Set_Part_Style (+Progress_Label, Label_Part, Style.Base (Text_Style).Build);
+      Add_Child (+Content, +Progress_Label);
+      Progress_Track := Boxes.Create_Handle;
+      Progress_Fill := Boxes.Create_Handle;
+      Set_Part_Style (+Progress_Track, Main_Part, Style.Base
+        ((Display => Set (Flex), Flex_Direction => Set (Row), Height => Set (Size (Px (18.0))),
+          Flex_Shrink => Set (0.0), Background_Color => Set_Bg (RGB (38, 50, 67)),
+          Border_Radius => Set (Radius (Px (3.0))), others => <>)).Build);
+      Add_Child (+Progress_Track, +Progress_Fill);
+      Add_Child (+Content, +Progress_Track);
+      Show_Progress;
       Output := Adi.Widget.Text_Editor.Create_Handle;
       Adi.Widget.Text_Editor.Set_Read_Only (Output);
       Adi.Widget.Text_Editor.Set_Context_Menu_Part_Styles (Output,
@@ -119,7 +159,8 @@ package body Editor_Export is
       Set_Part_Style (+Output, Knob_Part, Style.Base
         ((Width => Set (Size (Px (10.0))), Min_Height => Set (Size (Px (24.0))),
           Background_Color => Set_Bg (RGB (115, 135, 160)), others => <>)).Build);
-      Dialogs.Set_Content (Dialog, +Output);
+      Add_Child (+Content, +Output);
+      Dialogs.Set_Content (Dialog, +Content);
       Connect_Frame (W, Poll'Access);
    end Build;
 end Editor_Export;

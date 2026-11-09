@@ -38,6 +38,8 @@
             for I in 1 .. 3000 loop
                Render (W);
                Editor_Export.Poll (W);
+               Check (not Editor_Export.Is_Busy or else Editor_Export.Progress_Percent < 100,
+                      "Running exports never show 100 percent");
                exit when not Editor_Export.Is_Busy;
                delay 0.01;
             end loop;
@@ -384,6 +386,7 @@
          Check_Editor_Log ("settings 320 180 24");
          Export_Selected (Files (Test_Dir & "/export final.mp4"));
          Check (Editor_Export.Is_Busy, "Export returns immediately while FFmpeg runs");
+         Check (Editor_Export.Progress_Percent = 0, "Export popup starts at zero percent");
          declare
             Allow : Boolean := True;
          begin
@@ -392,6 +395,7 @@
          end;
          Finish_Export;
          Check (Reply.Ok and then Ada.Directories.Exists (Test_Dir & "/export final.mp4"), "Real GUI export");
+         Check (Editor_Export.Progress_Percent = 100, "Successful export fills the progress bar");
          Check_Editor_Log ("export " & FS.Quote_Path (Test_Dir & "/export final.mp4"));
          Initial_History := History;
          Export_Selected (Files (Test_Dir & "/missing/export.mp4"));
@@ -399,6 +403,7 @@
          Check (Ada.Strings.Fixed.Index (Editor_Export.Details, "No such file or directory") > 0,
                 "Failed export displays the actual FFmpeg error");
          Check (not Reply.Ok, "Failed export must report failure");
+         Check (Editor_Export.Progress_Percent < 100, "Failed export never shows completion");
          Check_Editor_Log ("export " & FS.Quote_Path (Test_Dir & "/missing/export.mp4"));
          Export_Selected (Adi.OS.Empty_Strings);
          Check (History = Initial_History, "Export/failure/cancel must not edit project");

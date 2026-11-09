@@ -32,13 +32,18 @@ package Framewise.Plan is
 
    Max_Plan : constant := 16_384;
 
+   function Output_Duration (S : Sequence) return Time
+     with Pre => Well_Formed (S);
+   --  Only tracks selected by the current renderer contribute to progress.
+
    procedure Generate
      (S      : Sequence;
       Cfg    : Settings;
       Output : String;
       Plan   : out String;
       Last   : out Natural;
-      Ok     : out Boolean)
+      Ok     : out Boolean;
+      Progress_File : String := "")
      with Pre => Well_Formed (S) and then Plan'Length >= Max_Plan;
    --  Plan (Plan'First .. Last) is the full ffmpeg command line, one
    --  argument per space, filter graph quoted. Ok = False when there

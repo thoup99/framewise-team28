@@ -34,6 +34,8 @@ package Framewise.Session is
 
    type Export_Job is limited private;
    function Export_Running (Job : Export_Job) return Boolean;
+   function Export_Percent (Job : Export_Job) return Natural;
+   --  Monotonic within a job; 100 is reserved for successful process completion.
    procedure Start_Export
      (S : Session; Output : String; Job : in out Export_Job; R : out Response;
       Wait_In_Background : Boolean := False);
@@ -87,6 +89,13 @@ private
       PID : GNAT.OS_Lib.Process_Id := GNAT.OS_Lib.Invalid_Pid;
       Log_File : GNAT.OS_Lib.String_Access := null;
       Output : Path;
+      Progress_File : GNAT.OS_Lib.String_Access := null;
+      Total_Time : Time := 0;
+      Percent : Natural range 0 .. 100 := 0;
+      Progress_Offset : Long_Long_Integer := 0;
+      Progress_Line : String (1 .. 128) := [others => ' '];
+      Progress_Length : Natural range 0 .. 128 := 0;
+      Progress_Overflow : Boolean := False;
       Completion : Export_Completion_Access := null;
       Waiter : Export_Waiter_Access := null;
    end record;

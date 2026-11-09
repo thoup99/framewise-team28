@@ -127,9 +127,11 @@ use the existing Framewise syntax and validation; they are optional.
 7. **Project Settings** edits the existing width, height and FPS settings.
    **Export Video** asks for an output path and uses the existing ffmpeg
    exporter. ffmpeg must be installed. Export starts a child process and keeps
-   the window responsive. A modal status window shows **Exporting...**, then
-   success or the captured FFmpeg error details. Close becomes available when
-   the job finishes. Window closing waits for an active export. Console `export`
+   the window responsive. A modal status window shows **Exporting...** with a
+   progress bar and percentage based on FFmpeg's processed timestamp and the
+   rendered tracks' duration. It reaches 100% only after successful completion;
+   failed exports retain their last percentage and show FFmpeg error details.
+   Close becomes available when the job finishes. Window closing waits for an active export. Console `export`
    commands use the same status window; each result is logged once on completion.
 
 Keyboard shortcuts: Ctrl+N New, Ctrl+O Open, Ctrl+S Save,
