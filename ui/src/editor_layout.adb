@@ -253,6 +253,8 @@ package body Editor_Layout is
         .On_Hover ((Background_Color => Set_Bg (RGB (145, 170, 200)), others => <>))
         .On_Press ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
 
+      Set_Part_Style (+Tracks, Items_Part, Style.Base
+        ((Background_Color => Set_Bg (RGB (88, 220, 185)), others => <>)).Build);
       Set_Part_Style (+Tracks, Label_Part, Style.Base (Text_Style).Build);
       Set_Part_Style (+Tracks, Cursor_Part, Style.Base
         ((Background_Color => Set_Bg (RGB (255, 225, 130)), others => <>)).Build);

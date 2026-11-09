@@ -57,6 +57,20 @@ procedure Timeline_View_Tests is
       return (0.0, 0.0, 0.0, 0.0);
    end Clip_Box;
 
+   function Snap_Guide return Rectangle is
+   begin
+      for I in 1 .. Item_Count (+H) loop
+         declare
+            Drawn : constant Item := Get_Item (+H, I);
+         begin
+            if Drawn.Kind = Panel_Item and then Drawn.Part = Items_Part then
+               return Drawn.Geometry;
+            end if;
+         end;
+      end loop;
+      return (0.0, 0.0, 0.0, 0.0);
+   end Snap_Guide;
+
    function Razor_Guide return Rectangle is
    begin
       for I in 1 .. Item_Count (+H) loop
@@ -339,7 +353,7 @@ begin
       procedure Drop_At
         (Raw, Expected : Long_Float; Modifiers : SDL_Keymod;
          Zoom : Long_Float := 32.0; Success : Boolean := True;
-         Interval : Framewise.Time := Framewise.Timebase / 2)
+         Interval : Framewise.Time := Framewise.Timebase / 2; Guide : Long_Float := -1.0)
       is
          History : constant Natural := FS.History_Length (S);
          Grab : Pixel_Type;
@@ -360,6 +374,13 @@ begin
          pragma Assert (abs (Clip_Box ("dragged").X - (110.0 + Pixel_Type (Expected * Zoom))) < 0.01,
                         "Drag preview must use snapped target");
          pragma Assert (FS.History_Length (S) = History, "Preview must not edit document");
+         if Guide >= 0.0 then
+            pragma Assert (Snap_Guide.Width > 0.0 and then
+              abs (Snap_Guide.X - (110.0 + Pixel_Type (Guide * Zoom))) < 0.01,
+              "Guide marks the actual snapping edge");
+         elsif Guide = -2.0 then
+            pragma Assert (Snap_Guide.Width = 0.0, "Free drag has no snap guide");
+         end if;
          declare
             Ghost_Label, Other_Label : Natural := 0;
          begin
@@ -385,6 +406,7 @@ begin
          Expect_Mouse_Success := True;
          Set_Modifiers (0);
          Rebuild;
+         pragma Assert (Snap_Guide.Width = 0.0, "Guide disappears after release");
          if Success then
             pragma Assert (FS.History_Length (S) = History + 1, "Drop submits exactly one command");
             pragma Assert (abs (Clip_Box ("dragged").X - (110.0 + Pixel_Type (Expected * Zoom))) < 0.01,
@@ -397,15 +419,15 @@ begin
       end Drop_At;
    begin
       V.Playhead := 0;
-      Drop_At (3.45, 3.45, 0);                  --  Free movement is unchanged.
-      Drop_At (3.45, 3.3, SDL_KMOD_SHIFT);      --  Left edge touches left neighbor's end.
-      Drop_At (7.85, 8.0, SDL_KMOD_SHIFT);      --  Right edge touches right neighbor's start.
+      Drop_At (3.45, 3.45, 0, Guide => -2.0);                  --  Free movement is unchanged.
+      Drop_At (3.45, 3.3, SDL_KMOD_SHIFT, Guide => 3.3);      --  Left edge touches left neighbor's end.
+      Drop_At (7.85, 8.0, SDL_KMOD_SHIFT, Guide => 10.0);      --  Right edge touches right neighbor's start.
       Drop_At (3.65, 3.65, SDL_KMOD_SHIFT);     --  Outside the 10-pixel attraction range.
       Drop_At (13.15, 13.15, SDL_KMOD_SHIFT);   --  Ignore the audio track's end at 13.
       Drop_At (3.5, 3.3, SDL_KMOD_SHIFT, 32.0);
       Drop_At (3.5, 3.5, SDL_KMOD_SHIFT, 64.0); --  Same time gap, farther apart on screen.
       Drop_At (6.24, 6.0, SDL_KMOD_CTRL);
-      Drop_At (6.26, 6.5, SDL_KMOD_CTRL);
+      Drop_At (6.26, 6.5, SDL_KMOD_CTRL, Guide => 6.5);
       Drop_At (6.25, 6.5, SDL_KMOD_CTRL);       --  Halfway rounds toward the later interval.
       Drop_At (6.12, 6.0, SDL_KMOD_CTRL, Interval => Framewise.Timebase / 4);
       Drop_At (6.14, 6.25, SDL_KMOD_CTRL, Interval => Framewise.Timebase / 4);
@@ -421,7 +443,7 @@ begin
       --  competing with neighbors. Preview and release must agree.
       V.Playhead := Framewise.Time (6.3 * Long_Float (Framewise.Timebase));
       Drop_At (6.15, 6.3, SDL_KMOD_SHIFT);     --  Left edge meets the cursor.
-      Drop_At (4.45, 4.3, SDL_KMOD_SHIFT);     --  Right edge meets the cursor.
+      Drop_At (4.45, 4.3, SDL_KMOD_SHIFT, Guide => 6.3);     --  Right edge meets the cursor.
       Drop_At (6.15, 6.15, 0);                --  No snapping without Shift.
       Drop_At (6.65, 6.65, SDL_KMOD_SHIFT);    --  Outside the attraction range.
       Drop_At (6.5, 6.5, SDL_KMOD_SHIFT, 64.0); --  Threshold uses screen pixels.

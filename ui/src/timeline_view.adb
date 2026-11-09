@@ -65,7 +65,13 @@ package body Timeline_View is
 
    --  Preview and release share the same target calculation. Shift aligns
    --  either edge to a valid neighbor or the playhead; Control rounds the start.
-   function Drag_Position (W : Track_Widget; X : Pixel_Type) return Long_Float is
+   type Move_Target is record
+      Start : Long_Float;
+      Snapped : Boolean;
+      Edge : Long_Float;
+   end record;
+
+   function Drag_Target (W : Track_Widget; X : Pixel_Type) return Move_Target is
       Raw : constant Long_Float := Long_Float'Max
         (0.0, W.Drag_Start_Time + Long_Float (X - W.Drag_Start_X) / W.Zoom);
       Shift : constant Boolean := (W.Drag_Modifiers and Adi.SDL.Events.SDL_KMOD_SHIFT) /= 0;
@@ -80,10 +86,10 @@ package body Timeline_View is
                      Found : Boolean := False;
                      Duration : Framewise.Time := 0;
                      Snapped : Boolean := False;
-                     Best : Framewise.Time := 0;
+                     Best, Best_Edge : Framewise.Time := 0;
                      Best_Distance : Long_Float := Snap_Distance;
 
-                     procedure Consider (Target : Framewise.Time) is
+                     procedure Consider (Target, Edge : Framewise.Time) is
                         Distance : constant Long_Float := abs (Framewise.Seconds (Target) - Raw) * W.Zoom;
                      begin
                         if Distance > Snap_Distance or else
@@ -108,6 +114,7 @@ package body Timeline_View is
                         end loop;
                         Snapped := True;
                         Best := Target;
+                        Best_Edge := Edge;
                         Best_Distance := Distance;
                      end Consider;
                   begin
@@ -124,21 +131,22 @@ package body Timeline_View is
                               Other renames Track.Clips (I);
                            begin
                               if Framewise.Image (Other.N) /= To_String (W.Drag_Name) then
-                                 Consider (Other.Start + (Other.Src_Out - Other.Src_In));
+                                 Consider (Other.Start + (Other.Src_Out - Other.Src_In),
+                                           Other.Start + (Other.Src_Out - Other.Src_In));
                                  if Other.Start >= Duration then
-                                    Consider (Other.Start - Duration);
+                                    Consider (Other.Start - Duration, Other.Start);
                                  end if;
                               end if;
                            end;
                         end loop;
                         --  Either edge may meet the playhead. Use the same
                         --  distance and overlap checks as neighboring clips.
-                        Consider (W.Playhead);
+                        Consider (W.Playhead, W.Playhead);
                         if W.Playhead >= Duration then
-                           Consider (W.Playhead - Duration);
+                           Consider (W.Playhead - Duration, W.Playhead);
                         end if;
                         if Snapped then
-                           return Framewise.Seconds (Best);
+                           return (Framewise.Seconds (Best), True, Framewise.Seconds (Best_Edge));
                         end if;
                         exit;
                      end if;
@@ -147,8 +155,17 @@ package body Timeline_View is
             end loop;
          end;
       end if;
-      return Snap_Time (W, Raw);
-   end Drag_Position;
+      declare
+         Start : constant Long_Float := Snap_Time (W, Raw);
+         Grid : constant Boolean := W.Snap_Interval > 0 and then
+           (W.Drag_Modifiers and Adi.SDL.Events.SDL_KMOD_CTRL) /= 0;
+      begin
+         return (Start, Grid, Start);
+      end;
+   end Drag_Target;
+
+   function Drag_Position (W : Track_Widget; X : Pixel_Type) return Long_Float is
+     (Drag_Target (W, X).Start);
 
    procedure Set_Razor_Pointer (W : in out Track_Widget;
       X, Y : Pixel_Type; Active : Boolean) is
@@ -468,6 +485,21 @@ package body Timeline_View is
          if X >= Left and then X < Right then
             Add_Item (W, Make_Panel (Selected_Part,
               (X, G.Y, Pixel_Type'Min (2.0, Right - X), G.Height), 5));
+         end if;
+         if W.Drag_Active and then not W.Drag_Trim_Left and then not W.Drag_Trim_Right then
+            declare
+               Target : constant Move_Target := Drag_Target (W, W.Drag_Current_X);
+               Guide : constant Pixel_Type := Left + Pixel_Type ((Target.Edge - W.First_Second) * W.Zoom);
+            begin
+               if Target.Snapped and then Guide >= Left and then Guide < Right then
+                  --  Draw last so the target stays visible over every clip.
+                  Add_Item (W, Make_Panel (Items_Part,
+                    (Guide, G.Y, Pixel_Type'Min (2.0, Right - Guide), G.Height), 6));
+                  Label ((Pixel_Type'Min (Guide + 5.0, Right - 150.0), G.Y, 145.0, 25.0),
+                    "Snap: " & Framewise.Session.Image_Time
+                      (Framewise.Time (Target.Edge * Long_Float (Framewise.Timebase))) & " s", 7);
+               end if;
+            end;
          end if;
          if not Any_Track then
             Label ((Left, Y, Right - Left, 30.0), "No tracks. Use Add Track to begin.");
