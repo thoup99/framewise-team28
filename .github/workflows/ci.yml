@@ -50,7 +50,7 @@ jobs:
           ../cli/bin/framewise_cli -c "load cut.fw" -c "export out.mp4"
           ffprobe -v error -show_entries format=duration -of csv=p=0 out.mp4 | grep -q '^22\.'
       - name: Export and proxy preserve shell-sensitive paths
-        run: python3 tests/check_shell_paths.py cli/bin/framewise_cli
+        run: python3 tests/check_shell_paths.py cli/bin/framewise_cli --jobs tests/bin/export_job_tests
       - name: JPEG reference frame and header
         run: |
           cd examples

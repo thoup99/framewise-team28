@@ -9,12 +9,13 @@ import tempfile
 
 
 def run(*args):
-    return subprocess.run(args, check=True, text=True, capture_output=True)
+    return subprocess.run(args, check=True, text=True, capture_output=True, timeout=60)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('cli', type=Path)
+    parser.add_argument('--jobs', type=Path, help='Exercise both export completion strategies')
     options = parser.parse_args()
     cli = options.cli.resolve()
     # Exercise both document quoting and shell quoting with the same paths.
@@ -37,6 +38,9 @@ def main():
         assert 'ok wrote ' in result.stdout, result.stdout
         assert output.is_file(), 'Export must use the requested directory and filename'
         assert Path(str(source) + '.proxy.mov').is_file(), 'Proxy must stay beside its source'
+        if options.jobs:
+            jobs = run(str(options.jobs.resolve()), str(source), str(folder / 'job'))
+            print(jobs.stdout.strip())
         probe = json.loads(run('ffprobe', '-v', 'error', '-show_entries',
                                'format=duration:stream=width,height', '-of', 'json',
                                str(output)).stdout)

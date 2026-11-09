@@ -1,4 +1,5 @@
 with Ada.Text_IO;
+with Ada.Unchecked_Deallocation;
 with Framewise.Shell;
 with Framewise.Decode;
 
@@ -359,6 +360,40 @@ package body Framewise.Session is
       end case;
    end Execute;
 
+   protected body Export_Completion is
+      procedure Finish (Success : Boolean) is
+      begin
+         Ok := Success;
+      end Finish;
+
+      function Succeeded return Boolean is (Ok);
+   end Export_Completion;
+
+   task body Export_Waiter is
+      use type GNAT.OS_Lib.Process_Id;
+      Expected, PID : GNAT.OS_Lib.Process_Id;
+      Success : Boolean;
+   begin
+      accept Await (PID : GNAT.OS_Lib.Process_Id) do
+         Expected := PID;
+      end Await;
+      --  Only wait here. Process creation remains on the caller thread and
+      --  all UI updates remain on the UI thread. Windows GNAT supports this
+      --  blocking wait, but its Non_Blocking_Wait_Process always returns no PID.
+      loop
+         GNAT.OS_Lib.Wait_Process (PID, Success);
+         exit when PID = Expected or else PID = GNAT.OS_Lib.Invalid_Pid;
+      end loop;
+      Result.Finish (PID = Expected and then Success);
+   exception
+      when others => Result.Finish (False);
+   end Export_Waiter;
+
+   procedure Free_Waiter is new Ada.Unchecked_Deallocation
+     (Export_Waiter, Export_Waiter_Access);
+   procedure Free_Completion is new Ada.Unchecked_Deallocation
+     (Export_Completion, Export_Completion_Access);
+
    function Export_Running (Job : Export_Job) return Boolean is
       use type GNAT.OS_Lib.Process_Id;
    begin
@@ -379,7 +414,8 @@ package body Framewise.Session is
    end Export_Output;
 
    procedure Start_Export
-     (S : Session; Output : String; Job : in out Export_Job; R : out Response)
+     (S : Session; Output : String; Job : in out Export_Job; R : out Response;
+      Wait_In_Background : Boolean := False)
    is
       use GNAT.OS_Lib;
       Text : String (1 .. Plan.Max_Plan);
@@ -414,6 +450,11 @@ package body Framewise.Session is
          Set (R, False, "err cannot start native shell for FFmpeg");
          return;
       end if;
+      if Wait_In_Background or else Shell.Is_Windows then
+         Job.Completion := new Export_Completion;
+         Job.Waiter := new Export_Waiter (Job.Completion);
+         Job.Waiter.Await (Job.PID);
+      end if;
       Job.Output := To_Path (Output);
       Set (R, True, "ok exporting " & Output);
    end Start_Export;
@@ -429,7 +470,19 @@ package body Framewise.Session is
       if not Export_Running (Job) then
          return;
       end if;
-      Non_Blocking_Wait_Process (PID, Success);
+      if Job.Waiter /= null then
+         --  Read only after task termination, then release both objects. A
+         --  completed export can be followed by another export in the same job.
+         if not Job.Waiter.all'Terminated then
+            return;
+         end if;
+         Success := Job.Completion.Succeeded;
+         PID := Job.PID;
+         Free_Waiter (Job.Waiter);
+         Free_Completion (Job.Completion);
+      else
+         Non_Blocking_Wait_Process (PID, Success);
+      end if;
       if PID /= Job.PID then
          return;
       end if;
