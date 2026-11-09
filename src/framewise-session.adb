@@ -1,5 +1,5 @@
 with Ada.Text_IO;
-with GNAT.OS_Lib;
+with Framewise.Shell;
 with Framewise.Decode;
 
 package body Framewise.Session is
@@ -14,7 +14,6 @@ package body Framewise.Session is
    procedure Do_Info (S : Session; N : Name; R : out Response);
    procedure Do_Plan (S : Session; Output : String; R : out Response; Run : Boolean);
    procedure Do_Proxy (S : Session; N : Name; R : out Response);
-   procedure Run_Shell (Cmd : String; Status : out Integer; Found : out Boolean);
    procedure Do_Save (S : Session; File : String; R : out Response);
    procedure Do_Load (S : in out Session; File : String; R : out Response);
 
@@ -222,7 +221,7 @@ package body Framewise.Session is
          Status : Integer;
          Found  : Boolean;
       begin
-         Run_Shell (Text (1 .. Last), Status, Found);
+         Shell.Run (Text (1 .. Last), Status, Found);
          if not Found then
             Set (R, False, "err no shell to run ffmpeg; use 'plan' and run it yourself");
          elsif Status = 0 then
@@ -233,58 +232,14 @@ package body Framewise.Session is
       end;
    end Do_Plan;
 
-      --  Run one line through the platform shell so quoting survives.
-   --  Prefer sh on Unix-like systems and fall back to cmd.exe on Windows.
-   procedure Run_Shell
-     (Cmd    : String;
-      Status : out Integer;
-      Found  : out Boolean)
-   is
-      use GNAT.OS_Lib;
-
-      Shell : String_Access := Locate_Exec_On_Path ("sh");
-   begin
-      Status := -1;
-
-      if Shell /= null then
-         declare
-            Args : Argument_List_Access :=
-              new Argument_List'(new String'("-c"), new String'(Cmd));
-         begin
-            Status := Spawn (Shell.all, Args.all);
-            Free (Args);
-            Free (Shell);
-            Found := True;
-            return;
-         end;
-      end if;
-
-      Shell := Locate_Exec_On_Path ("cmd.exe");
-
-      if Shell /= null then
-         declare
-            Args : Argument_List_Access :=
-              new Argument_List'(new String'("/C"), new String'(Cmd));
-         begin
-            Status := Spawn (Shell.all, Args.all);
-            Free (Args);
-            Free (Shell);
-            Found := True;
-            return;
-         end;
-      end if;
-
-      Found := False;
-   end Run_Shell;
-
    --  The proxy is the file the editor actually reads: intra-only video
    --  (every frame a keyframe) and PCM audio, both decodable in pure Ada
    --  by Framewise.Decode. The original is only touched by export.
    function Proxy_Command (Source : String) return String is
-     ("ffmpeg -y -hide_banner -loglevel error -i " & Source
+     ("ffmpeg -y -hide_banner -loglevel error -i " & Shell.Quote_Path (Source)
       & " -vf scale=-2:540 -c:v mjpeg -q:v 3 -pix_fmt yuvj420p"
       & " -c:a pcm_s16le -ar 48000 -movflags +faststart "
-      & Source & ".proxy.mov");
+      & Shell.Quote_Path (Source & ".proxy.mov"));
 
    procedure Do_Proxy (S : Session; N : Name; R : out Response) is
       Sr     : constant Source_Id := Find_Source (S.Seq, N);
@@ -298,7 +253,7 @@ package body Framewise.Session is
       declare
          File : constant String := Image (S.Seq.Sources (Sr).File);
       begin
-         Run_Shell (Proxy_Command (File), Status, Found);
+         Shell.Run (Proxy_Command (File), Status, Found);
          if not Found then
             Set (R, False, "err no shell to run ffmpeg: " & Proxy_Command (File));
          elsif Status = 0 then

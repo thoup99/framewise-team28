@@ -7,6 +7,7 @@ with FFmpeg.Version;
 with Framewise;           use Framewise;
 with Framewise.Commands;  use Framewise.Commands;
 with Framewise.Session;
+with Framewise.Shell;
 with Framewise.Timeline;  use Framewise.Timeline;
 with Interfaces.C;
 
@@ -212,6 +213,17 @@ procedure Tests is
         (for some I in 1 .. R.Length - Sub'Length + 1 =>
            R.Text (I .. I + Sub'Length - 1) = Sub);
    begin
+      Check ("Windows uses cmd even when sh is installed",
+             Framewise.Shell.Executable (Windows => True) = "cmd.exe");
+      Check ("POSIX uses sh", Framewise.Shell.Executable (Windows => False) = "sh");
+      Check ("Windows paths keep backslashes inside quotes",
+             Framewise.Shell.Quote_Path ("C:\media\clip.mp4", Windows => True) =
+               '"' & "C:\media\clip.mp4" & '"');
+      Check ("POSIX paths keep backslashes inside single quotes",
+             Framewise.Shell.Quote_Path ("back\slash.mp4", Windows => False) =
+               "'back\slash.mp4'");
+      Check ("POSIX apostrophe is escaped outside the quoted span",
+             Framewise.Shell.Quote_Path ("take'1.mp4", Windows => False) = "'take'\''1.mp4'");
       Execute (S, "import a a.mp4 30", R);
       Execute (S, "track v1", R);
       Execute (S, "place c1 v1 a 0 10 0", R);
@@ -224,7 +236,7 @@ procedure Tests is
       Check ("incomplete plan preserves project", not R.Ok and History_Length (S) = 3);
       Execute (S, "plan out.mp4", R);
       Check ("plan is an ffmpeg line",
-             R.Ok and Has (R, "-i a.mp4") and Has (R, "[vout]"));
+             R.Ok and Has (R, "-i " & Framewise.Shell.Quote_Path ("a.mp4")) and Has (R, "[vout]"));
       Execute (S, "undo", R);
       Check ("undo", R.Ok and History_Length (S) = 2);
       Execute (S, "plan out.mp4", R);

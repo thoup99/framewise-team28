@@ -1,3 +1,5 @@
+with Framewise.Shell;
+
 package body Framewise.Plan is
 
    function Sec (T : Time) return String;
@@ -132,7 +134,7 @@ package body Framewise.Plan is
                if Used then
                   Input_Of (Src) := Inputs;
                   Inputs := Inputs + 1;
-                  Put (" -i " & Image (S.Sources (Src).File));
+                  Put (" -i " & Shell.Quote_Path (Image (S.Sources (Src).File)));
                end if;
             end;
          end if;
@@ -151,7 +153,7 @@ package body Framewise.Plan is
       if ATr /= 0 then
          Put (" -map ""[aout]""");
       end if;
-      Put (" -r " & Img (Cfg.FPS) & " -pix_fmt yuv420p " & Output);
+      Put (" -r " & Img (Cfg.FPS) & " -pix_fmt yuv420p " & Shell.Quote_Path (Output));
       Last := P;
    end Generate;
 
