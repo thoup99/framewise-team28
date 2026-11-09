@@ -19,7 +19,7 @@ package body Editor_Timeline_Panel is
 
    procedure Build_Tools is
    begin
-      Add_Track_Button := Make_Button (+Timeline_Tools, "Add Track");
+      Add_Track_Button := Make_Button (+Timeline_Tools, "Add Track", Show_Tooltip => False);
       Undo_Button := Make_Button (+Timeline_Tools, "Undo");
       Razor_Button := Make_Button (+Timeline_Tools, "Razor");
       Set_Part_Style (+Razor_Button, Main_Part, Style.Base
@@ -27,12 +27,12 @@ package body Editor_Timeline_Panel is
           Padding => Set (CSS_Box (Px (7.0), Px (10.0))),
           Border_Radius => Set (Radius (Px (3.0))), others => <>))
         .On_Selected ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
-      Move_Button := Make_Button (+Timeline_Tools, "Move Clip");
+      Move_Button := Make_Button (+Timeline_Tools, "Move Clip", Show_Tooltip => False);
       Delete_Button := Make_Button (+Timeline_Tools, "Delete Clip");
-      Zoom_Out := Make_Button (+Timeline_Tools, "Zoom -");
-      Zoom_In := Make_Button (+Timeline_Tools, "Zoom +");
-      Scroll_Left := Make_Button (+Timeline_Tools, "Earlier");
-      Scroll_Right := Make_Button (+Timeline_Tools, "Later");
+      Zoom_Out := Make_Button (+Timeline_Tools, "Zoom -", Show_Tooltip => False);
+      Zoom_In := Make_Button (+Timeline_Tools, "Zoom +", Show_Tooltip => False);
+      Scroll_Left := Make_Button (+Timeline_Tools, "Earlier", Show_Tooltip => False);
+      Scroll_Right := Make_Button (+Timeline_Tools, "Later", Show_Tooltip => False);
       Add_Label (+Timeline_Tools, "Snap (s)");
       Snap_Interval_Input := Inputs.Create_Handle ("0.5");
       Inputs.Set_Min_Visible_Chars (Snap_Interval_Input, 6);

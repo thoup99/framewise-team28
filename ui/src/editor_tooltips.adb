@@ -20,6 +20,8 @@ package body Editor_Tooltips is
    Tip : Labels.Label_Handle;
    Hovered : Widget_Handle := Null_Handle;
    Since : Time := Clock;
+   --  Give users time to move across controls without opening a tooltip.
+   Hover_Delay : constant Duration := 1.2;
 
    procedure Register (Owner : Widget_Handle; Text : String) is
    begin
@@ -56,7 +58,7 @@ package body Editor_Tooltips is
       end if;
       if Target = Null_Handle then
          Set_Visible (+Tip, False);
-      elsif To_Duration (Clock - Since) >= 0.45 then
+      elsif To_Duration (Clock - Since) >= Hover_Delay then
          declare
             G : constant Rectangle := Geometry_In_Window (Target);
             S : constant Size_2D := Get_Size (Win);
