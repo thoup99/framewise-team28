@@ -457,17 +457,6 @@
          Stage ("scrollbar routed drag and track click must not edit clips");
          Open_Selected (Files ("examples/cut.fw"));
          Check (Reply.Ok, "Open bundled example");
-         declare
-            V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
-         begin
-            V.Selected_Clip := US.To_Unbounded_String ("c2");
-            Clip_Selected ("c2");
-            Check (Ada.Strings.Fixed.Index (Adi.Widget.Text_Editor.Get_Text (Clip_Properties), "Start: 8.5 s") > 0
-              and then Ada.Strings.Fixed.Index (Adi.Widget.Text_Editor.Get_Text (Clip_Properties), "Duration: 5 s") > 0,
-              "Clip properties show the selected clip's timeline position and length");
-            V.Selected_Clip := US.Null_Unbounded_String;
-            Clip_Selected ("");
-         end;
          for I in 1 .. 6 loop
             Execute_Line ("track overflow" & Ada.Strings.Fixed.Trim (I'Image, Ada.Strings.Both));
             Check (Reply.Ok, "Create overflowing tracks");

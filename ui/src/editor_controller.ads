@@ -51,8 +51,6 @@ package Editor_Controller is
 
    procedure Export_Selected (Files : Adi.OS.String_Array);
 
-   procedure Refresh_Clip_Properties;
-
    procedure Clip_Selected (Name : String);
 
    procedure Clicked (Button : Widget_Handle);

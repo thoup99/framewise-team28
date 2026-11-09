@@ -36,7 +36,7 @@ package Editor_Context is
    Tracks : Timeline_View.Views.Handle;
    Preview, Status, Tool_Status : Labels.Label_Handle;
    Cursor_Time_Input, Snap_Interval_Input : Inputs.Text_Input_Handle;
-   Clip_Properties, Sources : Adi.Widget.Text_Editor.Text_Editor_Handle;
+   Sources : Adi.Widget.Text_Editor.Text_Editor_Handle;
    Source_Choice, Track_Choice, Kind_Choice : Combos.Combo_Box_Handle;
    File_Menu, Clip_Menu : Menus.Menu_Handle;
    Clip_Menu_Target : US.Unbounded_String;

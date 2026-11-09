@@ -94,14 +94,6 @@ package body Editor_Layout is
           Background_Color => Set_Bg (RGB (20, 26, 36)), others => <>)).Build);
       Set_Part_Style (+Sources, Text_Part, Style.Base (Text_Style).Build);
       Add_Child (+Bin, +Sources);
-      Add_Label (+Bin, "Clip Properties");
-      Clip_Properties := Adi.Widget.Text_Editor.Create_Handle ("No clip selected.");
-      Adi.Widget.Text_Editor.Set_Read_Only (Clip_Properties);
-      Set_Part_Style (+Clip_Properties, Main_Part, Style.Base
-        ((Height => Set (Size (Px (155.0))), Min_Height => Set (Size (Px (60.0))),
-          Overflow_Y => Set (Overflow_Auto), others => <>)).Build);
-      Set_Part_Style (+Clip_Properties, Text_Part, Style.Base (Text_Style).Build);
-      Add_Child (+Bin, +Clip_Properties);
    end Build_Project_Files;
 
    procedure Build_Preview is
