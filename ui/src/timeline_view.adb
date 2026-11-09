@@ -64,7 +64,7 @@ package body Timeline_View is
    end Update_Drag_Modifiers;
 
    --  Preview and release share the same target calculation. Shift aligns
-   --  either edge to a valid neighbor on this track; Control rounds the start.
+   --  either edge to a valid neighbor or the playhead; Control rounds the start.
    function Drag_Position (W : Track_Widget; X : Pixel_Type) return Long_Float is
       Raw : constant Long_Float := Long_Float'Max
         (0.0, W.Drag_Start_Time + Long_Float (X - W.Drag_Start_X) / W.Zoom);
@@ -131,6 +131,12 @@ package body Timeline_View is
                               end if;
                            end;
                         end loop;
+                        --  Either edge may meet the playhead. Use the same
+                        --  distance and overlap checks as neighboring clips.
+                        Consider (W.Playhead);
+                        if W.Playhead >= Duration then
+                           Consider (W.Playhead - Duration);
+                        end if;
                         if Snapped then
                            return Framewise.Seconds (Best);
                         end if;

@@ -396,6 +396,7 @@ begin
          end if;
       end Drop_At;
    begin
+      V.Playhead := 0;
       Drop_At (3.45, 3.45, 0);                  --  Free movement is unchanged.
       Drop_At (3.45, 3.3, SDL_KMOD_SHIFT);      --  Left edge touches left neighbor's end.
       Drop_At (7.85, 8.0, SDL_KMOD_SHIFT);      --  Right edge touches right neighbor's start.
@@ -415,6 +416,27 @@ begin
       Drop_At (3.45, 3.3, SDL_KMOD_SHIFT or SDL_KMOD_CTRL);
       Drop_At (6.24, 6.0, SDL_KMOD_SHIFT or SDL_KMOD_CTRL);
       Drop_At (9.8, 10.0, SDL_KMOD_CTRL, Success => False);
+
+      --  Shift can align either clip edge to the playhead, including when
+      --  competing with neighbors. Preview and release must agree.
+      V.Playhead := Framewise.Time (6.3 * Long_Float (Framewise.Timebase));
+      Drop_At (6.15, 6.3, SDL_KMOD_SHIFT);     --  Left edge meets the cursor.
+      Drop_At (4.45, 4.3, SDL_KMOD_SHIFT);     --  Right edge meets the cursor.
+      Drop_At (6.15, 6.15, 0);                --  No snapping without Shift.
+      Drop_At (6.65, 6.65, SDL_KMOD_SHIFT);    --  Outside the attraction range.
+      Drop_At (6.5, 6.5, SDL_KMOD_SHIFT, 64.0); --  Threshold uses screen pixels.
+      Drop_At (6.15, 6.3, SDL_KMOD_SHIFT or SDL_KMOD_CTRL);
+      V.Playhead := Framewise.Time (3.4 * Long_Float (Framewise.Timebase));
+      Drop_At (3.45, 3.4, SDL_KMOD_SHIFT);     --  Cursor is closer than neighbor.
+      V.Playhead := Framewise.Time (3.6 * Long_Float (Framewise.Timebase));
+      Drop_At (3.35, 3.3, SDL_KMOD_SHIFT);     --  Neighbor is closer than cursor.
+      V.Playhead := Framewise.Time (3.1 * Long_Float (Framewise.Timebase));
+      Drop_At (3.2, 3.3, SDL_KMOD_SHIFT);      --  Cursor target would overlap.
+      V.Playhead := Framewise.Time (12.1 * Long_Float (Framewise.Timebase));
+      Drop_At (10.15, 10.15, SDL_KMOD_SHIFT, Success => False);
+      V.Playhead := Framewise.Timebase / 2;   --  Clip cannot end before time zero.
+      Drop_At (0.6, 0.6, SDL_KMOD_SHIFT, Success => False);
+      V.Playhead := 0;
 
       --  Competing neighbors: select the closer valid edge rather than the first.
       Run ("move dragged 15");
