@@ -17,9 +17,9 @@ package body Editor_Project_Panel is
    begin
       Add_Label (+Bin, "Project Files");
       Add_Child (+Bin, +Filter_Row);
-      Filter_Buttons (All_Media) := Make_Button (+Filter_Row, "All");
-      Filter_Buttons (Video_Media) := Make_Button (+Filter_Row, "Video");
-      Filter_Buttons (Audio_Media) := Make_Button (+Filter_Row, "Audio");
+      Filter_Buttons (All_Media) := Make_Button (+Filter_Row, "All", Show_Tooltip => False);
+      Filter_Buttons (Video_Media) := Make_Button (+Filter_Row, "Video", Show_Tooltip => False);
+      Filter_Buttons (Audio_Media) := Make_Button (+Filter_Row, "Audio", Show_Tooltip => False);
       for H of Filter_Buttons loop
          Set_Part_Style (+H, Main_Part, Style.Base
            ((Background_Color => Set_Bg (RGB (38, 50, 67)),
