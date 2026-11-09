@@ -231,6 +231,7 @@ package body Editor_Controller is
           Margin => Set_Margin (CSS_Box (Px (0.0), Px (16.0), Px (0.0), Px (0.0))),
           Background_Color => Set_Bg (RGB (29, 38, 51)), others => <>)).Build);
       Update_Title;
+      Refresh_Clip_Properties;
       Mark_Dirty (+Tracks);
    end Refresh_Timeline;
 
@@ -480,8 +481,39 @@ package body Editor_Controller is
       end if;
    end Export_Selected;
 
+   procedure Refresh_Clip_Properties is
+      Seq : constant FS.Sequence_View := Read_Sequence;
+      V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+      LF : constant Character := Ada.Characters.Latin_1.LF;
+   begin
+      for Track of Seq.Tracks loop
+         if Track.Used then
+            for I in 1 .. Track.Count loop
+               declare
+                  C renames Track.Clips (I);
+               begin
+                  if Framewise.Image (C.N) = US.To_String (V.Selected_Clip) then
+                     Adi.Widget.Text_Editor.Set_Text (Clip_Properties,
+                       "Clip: " & Framewise.Image (C.N) & LF &
+                       "Source: " & Framewise.Image (Seq.Sources (C.Src).N) & LF &
+                       "Track: " & Framewise.Image (Track.N) & LF &
+                       "Start: " & FS.Image_Time (C.Start) & " s" & LF &
+                       "End: " & FS.Image_Time (C.Start + C.Src_Out - C.Src_In) & " s" & LF &
+                       "Duration: " & FS.Image_Time (C.Src_Out - C.Src_In) & " s" & LF &
+                       "Source range: " & FS.Image_Time (C.Src_In) & " - " & FS.Image_Time (C.Src_Out) & " s");
+                     return;
+                  end if;
+               end;
+            end loop;
+         end if;
+      end loop;
+      V.Selected_Clip := US.Null_Unbounded_String;
+      Adi.Widget.Text_Editor.Set_Text (Clip_Properties, "Select a timeline clip to inspect its properties.");
+   end Refresh_Clip_Properties;
+
    procedure Clip_Selected (Name : String) is
    begin
+      Refresh_Clip_Properties;
       Set_Focus (W, +Tracks);
       Tell ((if Name'Length = 0 then "No clip selected."
              else "Selected: " & Name & ". Drag to move, drag an edge to trim, or use Move / Delete."));
