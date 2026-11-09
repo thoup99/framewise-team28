@@ -469,6 +469,7 @@ package body Editor_Controller is
          declare
             G : constant Rectangle := Get_Geometry (Button);
          begin
+            Reset_File_Menu;
             Menus.Show_At (File_Menu, G.X, G.Y + G.Height, 230.0);
          end;
       elsif Button = Widget_Handle'(+Undo_Button) then
@@ -560,6 +561,21 @@ package body Editor_Controller is
          end;
       end if;
    end Clicked;
+
+   procedure Reset_File_Menu is
+   begin
+      --  Recreate the rows to clear the toolkit's retained click/keyboard
+      --  selection before reopening this transient action menu.
+      Menus.Clear_Items (File_Menu);
+      Menus.Add_Item (File_Menu, "New Project     Ctrl+N");
+      Menus.Add_Item (File_Menu, "Open Project    Ctrl+O");
+      Menus.Add_Item (File_Menu, "Save            Ctrl+S");
+      Menus.Add_Item (File_Menu, "Save As   Ctrl+Shift+S");
+      Menus.Add_Item (File_Menu, "Import Files...");
+      Menus.Add_Item (File_Menu, "Project Settings...");
+      Menus.Add_Item (File_Menu, "Export Video...");
+      Menus.Add_Item (File_Menu, "Exit");
+   end Reset_File_Menu;
 
    procedure Menu_Selected (Menu : Menus.Menu_Handle; Index : Positive; Text : String) is
       pragma Unreferenced (Menu, Text);

@@ -8,6 +8,8 @@ package Editor_Controller is
    --  All document changes pass through Session.Execute here.
    procedure Update_Filter_Buttons;
 
+   procedure Reset_File_Menu;
+
    procedure Tell (Text : String);
 
    --  Surface validation failures that occur before a session command runs.

@@ -60,6 +60,40 @@
          Assert_Centered;
          Check (Get_Scroll_Max_Offset_Y (+Track_Scroll) = 0.0, "Empty timeline must not overflow");
 
+         Stage ("File menu clears a previously selected row when reopened");
+         Clicked (+File_Button);
+         Render (W);
+         declare
+            Popup : constant Widget_Handle := Get_Overlay_Handle (W, Overlay_Count (W));
+            Row : constant Widget_Handle := Get_Child_Handle (Popup, 6);
+            G : constant Rectangle := Geometry_In_Window (Row);
+         begin
+            Adi.Window.On_Mouse_Down (W, G.X + 10.0, G.Y + G.Height / 2.0, Left_Button);
+            Adi.Window.On_Mouse_Up (W, G.X + 10.0, G.Y + G.Height / 2.0, Left_Button);
+            Check (Dialogs.Is_Shown (Form), "Selected File menu action opens its dialog");
+         end;
+         Form_Result (Null_Handle, 2, "Cancel");
+         Clicked (+File_Button);
+         Render (W);
+         declare
+            Popup : constant Widget_Handle := Get_Overlay_Handle (W, Overlay_Count (W));
+            Row : constant Widget_Handle := Get_Child_Handle (Popup, 6);
+            G : constant Rectangle := Geometry_In_Window (Row);
+         begin
+            Check (not Has_State (Row, State_Selected), "Reopened File menu has no sticky selected row");
+            Adi.Window.On_Mouse_Move (W, G.X + 10.0, G.Y + G.Height / 2.0);
+            Render (W);
+            Check (Get_Resolved_Part_Style (Row, Main_Part).Background_Color = RGB (45, 78, 119),
+                   "File menu action highlights on hover");
+            Adi.Window.On_Mouse_Move (W, G.X + G.Width + 20.0, G.Y);
+            Render (W);
+            Check (not Has_State (Row, State_Hovered) and then not Has_State (Row, State_Selected),
+                   "Menu highlight clears after pointer leaves");
+            Check (Get_Resolved_Part_Style (Row, Main_Part).Background_Color /= RGB (45, 78, 119),
+                   "No persistent highlight remains after hover");
+         end;
+         Menus.Hide (File_Menu);
+
          Stage ("snap interval field placement, typing and validation");
          declare
             V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);

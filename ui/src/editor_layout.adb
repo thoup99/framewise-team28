@@ -306,14 +306,7 @@ package body Editor_Layout is
             Enabled => True),
          Label_Part => (Style => Style.Base (Text_Style).Build, Enabled => True),
          others => <>));
-      Menus.Add_Item (File_Menu, "New Project     Ctrl+N");
-      Menus.Add_Item (File_Menu, "Open Project    Ctrl+O");
-      Menus.Add_Item (File_Menu, "Save            Ctrl+S");
-      Menus.Add_Item (File_Menu, "Save As   Ctrl+Shift+S");
-      Menus.Add_Item (File_Menu, "Import Files...");
-      Menus.Add_Item (File_Menu, "Project Settings...");
-      Menus.Add_Item (File_Menu, "Export Video...");
-      Menus.Add_Item (File_Menu, "Exit");
+      Reset_File_Menu;
    end Build_File_Menu;
 
    procedure Build is
