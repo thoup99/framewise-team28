@@ -111,6 +111,7 @@ def main():
         environment.setdefault('SDL_VIDEODRIVER', 'dummy')
         environment.setdefault('SDL_RENDER_DRIVER', 'software')
         environment['FRAMEWISE_TEST_DIR'] = work
+        environment['FRAMEWISE_CONFIG_HOME'] = str(directory / 'preferences')
         run([str(executable)], cwd=REPO, env=environment)
         result = subprocess.check_output(['ffprobe', '-v', 'error', '-show_entries',
                   'format=duration:stream=width,height', '-of', 'json', str(directory / 'export final.mp4')],

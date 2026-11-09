@@ -15,6 +15,7 @@ with Ada.Characters.Latin_1;
 with Ada.Characters.Handling;
 with Editor_Console;
 with Editor_Export;
+with Editor_Preferences;
 with Ada.Directories;
 with Ada.Strings.Fixed;
 with Interfaces.C.Extensions;
@@ -443,6 +444,7 @@ package body Editor_Controller is
             Adi.OS.Show_Open_File_Dialog (Open_Selected'Access, W,
               Filters => [(US.To_Unbounded_String ("Framewise projects"), US.To_Unbounded_String ("fw"))]);
          when Close_Editor =>
+            Editor_Preferences.Capture (W);
             Allow_Close := True;
             Adi.App.Request_Quit;
          when Nothing => null;
@@ -473,6 +475,7 @@ package body Editor_Controller is
    procedure Close_Requested (Window : Window_Handle; Allow : in out Boolean) is
       pragma Unreferenced (Window);
    begin
+      Editor_Preferences.Capture (W);
       if Editor_Export.Is_Busy then
          Allow := False;
          Tell ("Please wait for the export to finish before closing.");

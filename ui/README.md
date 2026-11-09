@@ -50,6 +50,21 @@ The **Timeline Cursor (s)** field after **Snap (s)** in the timeline toolbar let
 Invalid values are marked red and keep the last valid cursor position.
 Hover over buttons for descriptions and keyboard shortcuts.
 
+## Remembered layout
+
+Closing Framewise saves the normal window size, maximized state, and the
+Project Files/Video Preview and preview/timeline divider proportions. The next
+launch restores them and keeps the window centered. Restored window dimensions
+are constrained to the current display's usable area; maximized launches retain
+the last normal size for restoring the window later. Layout settings belong to
+the user profile and do not change projects or undo history.
+
+On Windows settings live at `%APPDATA%/Framewise/layout.conf`. On Linux they
+live at `$XDG_CONFIG_HOME/framewise/layout.conf`, falling back to
+`~/.config/framewise/layout.conf`. `FRAMEWISE_CONFIG_HOME` can override the
+settings directory, including for isolated tests. Missing, invalid, or
+inaccessible settings use the default layout without interrupting the editor.
+
 ## Optional console
 
 Click **Console** in the upper-right corner to open **Framewise Console** above

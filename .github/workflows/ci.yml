@@ -119,6 +119,7 @@ jobs:
         run: |
           ./bin/timeline_view_tests
           ./bin/editor_split_tests
+          python3 tests/run_layout_regressions.py --executable bin/editor_preferences_tests
 
       - name: Build CLI for GUI document comparison
         working-directory: cli
