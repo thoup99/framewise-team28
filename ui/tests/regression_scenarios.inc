@@ -505,6 +505,37 @@
                end;
             end loop;
             Check (Caret_Visible, "Empty console input must draw a visible caret");
+            Stage ("console scrollbar mouse drag and track paging");
+            declare
+               G : constant Rectangle := Geometry_In_Window (+Console_Output);
+               Initial_History : constant US.Unbounded_String := History;
+               Transcript : constant String := Adi.Widget.Text_Editor.Get_Text (Console_Output);
+            begin
+               Check (Get_Scroll_Max_Offset_Y (+Console_Output) > 0.0,
+                      "Console transcript overflows its viewport");
+               Check (Get_Resolved_Part_Style (+Console_Output, Scroll_Part).Background_Color = RGB (22, 29, 40)
+                 and then Get_Resolved_Part_Style (+Console_Output, Knob_Part).Background_Color = RGB (115, 135, 160),
+                 "Console scrollbar has a contrasting track and thumb");
+               Set_Scroll_Offset_Y (+Console_Output, 0.0);
+               Render (W);
+               --  Route through the modal window rather than calling the text
+               --  widget directly: this catches hit-testing and capture bugs.
+               Adi.Window.On_Mouse_Down (W, G.X + G.Width - 7.0, G.Y + 10.0, Left_Button);
+               Adi.Window.On_Mouse_Move (W, G.X + G.Width - 7.0, G.Y + G.Height);
+               Adi.Window.On_Mouse_Up (W, G.X + G.Width - 7.0, G.Y + G.Height, Left_Button);
+               Check (Get_Scroll_Offset_Y (+Console_Output) > 0.0,
+                      "Console scrollbar thumb drags through modal event routing");
+               Set_Scroll_Offset_Y (+Console_Output, 0.0);
+               Render (W);
+               Adi.Window.On_Mouse_Down (W, G.X + G.Width - 7.0, G.Y + G.Height - 10.0, Left_Button);
+               Adi.Window.On_Mouse_Up (W, G.X + G.Width - 7.0, G.Y + G.Height - 10.0, Left_Button);
+               Check (Get_Scroll_Offset_Y (+Console_Output) > 0.0,
+                      "Console scrollbar track click pages the transcript");
+               Check (Adi.Widget.Text_Editor.Get_Text (Console_Output) = Transcript,
+                      "Scrollbar interaction does not change the transcript");
+               Check (History = Initial_History, "Console scrolling does not edit the project");
+               Click_Control (+Console_Input);
+            end;
             Before := History;
             Command ("   ");
             Check (History = Before, "Blank console command must not change project");

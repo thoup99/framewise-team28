@@ -145,7 +145,19 @@ package body Editor_Console is
       Set_Part_Style (+Console_Output, Main_Part, Style.Base
         ((Flex_Grow => Set (1.0), Height => Set (Size (Px (0.0))),
           Min_Height => Set (Size (Px (40.0))),
+          Overflow_Y => Set (Overflow_Auto),
           Background_Color => Set_Bg (RGB (12, 17, 24)), others => <>)).Build);
+      --  The transcript owns its scrolling, so its scrollbar receives mouse
+      --  presses before text selection and remains inside the modal dialog.
+      Set_Part_Style (+Console_Output, Scroll_Part, Style.Base
+        ((Width => Set (Size (Px (14.0))),
+          Background_Color => Set_Bg (RGB (22, 29, 40)), others => <>)).Build);
+      Set_Part_Style (+Console_Output, Knob_Part, Style.Base
+        ((Width => Set (Size (Px (10.0))), Min_Height => Set (Size (Px (24.0))),
+          Background_Color => Set_Bg (RGB (115, 135, 160)),
+          Border_Radius => Set (Radius (Px (5.0))), others => <>))
+        .On_Hover ((Background_Color => Set_Bg (RGB (145, 170, 200)), others => <>))
+        .On_Press ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
       Set_Part_Style (+Console_Output, Text_Part, Style.Base (Text_Style).Build);
       Add_Child (+Content, +Console_Output);
 
