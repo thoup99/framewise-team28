@@ -30,6 +30,21 @@
          function Files (Path : String) return Adi.OS.String_Array is
            ([US.To_Unbounded_String (Path)]);
 
+         procedure Finish_Export is
+         begin
+            Check (Editor_Export.Is_Open, "Export status dialog is visible");
+            --  Process completion is polled by the UI frame, never a blocking
+            --  wait on the editor thread. Bound this loop to 30 seconds.
+            for I in 1 .. 3000 loop
+               Render (W);
+               Editor_Export.Poll (W);
+               exit when not Editor_Export.Is_Busy;
+               delay 0.01;
+            end loop;
+            Check (not Editor_Export.Is_Busy, "Export completes within test timeout");
+            Editor_Export.Close;
+         end Finish_Export;
+
          procedure Apply is
          begin
             Form_Result (Null_Handle, 1, "Apply");
@@ -363,11 +378,22 @@
          Apply;
          Check (Reply.Ok and then FS.Settings_Of (Editor).Width = 320, "Settings dialog");
          Check_Editor_Log ("settings 320 180 24");
-         Export_Selected (Files (Test_Dir & "/export.mp4"));
-         Check (Reply.Ok and then Ada.Directories.Exists (Test_Dir & "/export.mp4"), "Real GUI export");
-         Check_Editor_Log ("export " & FS.Quote_Path (Test_Dir & "/export.mp4"));
+         Export_Selected (Files (Test_Dir & "/export final.mp4"));
+         Check (Editor_Export.Is_Busy, "Export returns immediately while FFmpeg runs");
+         declare
+            Allow : Boolean := True;
+         begin
+            Close_Requested (W, Allow);
+            Check (not Allow, "Closing waits for the active export");
+         end;
+         Finish_Export;
+         Check (Reply.Ok and then Ada.Directories.Exists (Test_Dir & "/export final.mp4"), "Real GUI export");
+         Check_Editor_Log ("export " & FS.Quote_Path (Test_Dir & "/export final.mp4"));
          Initial_History := History;
          Export_Selected (Files (Test_Dir & "/missing/export.mp4"));
+         Finish_Export;
+         Check (Ada.Strings.Fixed.Index (Editor_Export.Details, "No such file or directory") > 0,
+                "Failed export displays the actual FFmpeg error");
          Check (not Reply.Ok, "Failed export must report failure");
          Check_Editor_Log ("export " & FS.Quote_Path (Test_Dir & "/missing/export.mp4"));
          Export_Selected (Adi.OS.Empty_Strings);
@@ -641,6 +667,16 @@
             Command ("plan " & Test_Dir & "/planned.mp4");
             Check (Reply.Ok and then History = Before and then not Dirty,
                    "Console accepts a valid plan immediately after an incomplete command");
+            Stage ("console export reports failure asynchronously and logs once");
+            Adi.Window.On_Text_Input (W, "export " & FS.Quote_Path (Test_Dir & "/console export.mp4"));
+            Press_Enter;
+            Check (Editor_Export.Is_Open and then Editor_Export.Is_Busy,
+                   "Console export opens the same asynchronous status window");
+            Finish_Export;
+            Check (not Reply.Ok and then History = Before, "Failed console export preserves document");
+            Check (Ada.Strings.Fixed.Count (Adi.Widget.Text_Editor.Get_Text (Console_Output),
+              "[Console] export " & FS.Quote_Path (Test_Dir & "/console export.mp4")) = 1,
+              "Console export is recorded exactly once on completion");
             Stage ("editor command logging without interrupting console typing");
             Inputs.Set_Text (Console_Input, "info c");
             Set_Focus (W, +Console_Input);

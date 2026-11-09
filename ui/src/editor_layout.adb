@@ -13,6 +13,7 @@ with Editor_Widgets; use Editor_Widgets;
 with Editor_Controller; use Editor_Controller;
 with Editor_Dialogs;
 with Editor_Console;
+with Editor_Export;
 with Editor_Tooltips;
 
 package body Editor_Layout is
@@ -344,6 +345,7 @@ package body Editor_Layout is
       Arrange_Panels;
       Editor_Dialogs.Build;
       Editor_Console.Build;
+      Editor_Export.Build;
       Build_File_Menu;
       Menus.Connect_Item_Selected (File_Menu, Menu_Selected'Access);
       Clip_Menu := Menus.Create_Handle;

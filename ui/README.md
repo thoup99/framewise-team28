@@ -34,7 +34,7 @@ its right edge. Drag the thumb, click the scrollbar track or use the wheel
 to reach tracks below the viewport. It hides when all tracks fit.
 
 Hold **Shift** while dragging a clip body to snap either edge to a neighboring
-clip on the same track when it is within 10 screen pixels. Hold **Control** to
+clip on the same track or the timeline cursor when it is within 10 screen pixels. Hold **Control** to
 snap the clip's start to the interval set in **Snap (s)** immediately after
 **Later**. The default is 0.5 seconds; positive decimal values such as 0.25 or 1
 are supported. Empty or invalid input is marked red and keeps the last valid
@@ -42,7 +42,13 @@ interval active. Halfway values round forward. With both held, a nearby valid
 clip edge takes priority, otherwise the configured interval applies. Modifier changes update the preview even without
 moving the pointer. Release commits one move command; overlap validation still
 applies. The dragged clip and its label are drawn above the other clips.
-Trim handles keep their existing behavior.
+A green guide and time label identify the target while a clip is snapped;
+the guide disappears on release. Control also snaps trim points and ruler
+scrubbing using the configured interval.
+
+The **Cursor (s)** field below the preview lets you jump to an exact time.
+Invalid values are marked red and keep the last valid cursor position.
+Hover over buttons for descriptions and keyboard shortcuts.
 
 ## Optional console
 
@@ -105,11 +111,17 @@ use the existing Framewise syntax and validation; they are optional.
    discarding changes; Cancel returns to the editor so they can be saved.
 7. **Project Settings** edits the existing width, height and FPS settings.
    **Export Video** asks for an output path and uses the existing ffmpeg
-   exporter. ffmpeg must be installed. Export runs synchronously, as before.
+   exporter. ffmpeg must be installed. Export starts a child process and keeps
+   the window responsive. A modal status window shows **Exporting...**, then
+   success or the captured FFmpeg error details. Close becomes available when
+   the job finishes. Window closing waits for an active export. Console `export`
+   commands use the same status window; each result is logged once on completion.
 
 Keyboard shortcuts: Ctrl+N New, Ctrl+O Open, Ctrl+S Save,
 Ctrl+Shift+S Save As, Ctrl+Z Undo, and Delete to remove a selected timeline
-clip while the timeline has focus.
+clip while the timeline has focus. With timeline focus, R toggles Razor,
+Home/End jump to the project bounds, Left/Right step one project frame, and
+Shift+Left/Right step one second. These keys do not intercept typing in fields.
 
 Media, track and clip identifiers are generated automatically and checked
 against the current session. Menu actions automatically quote paths in the

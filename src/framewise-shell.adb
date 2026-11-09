@@ -1,6 +1,8 @@
 with Ada.Strings.Unbounded;
 
 package body Framewise.Shell is
+   function Arguments (Command : String) return GNAT.OS_Lib.Argument_List_Access;
+
    function Quote_Path (Path : String; Windows : Boolean := Is_Windows) return String is
       use Ada.Strings.Unbounded;
       Result : Unbounded_String := To_Unbounded_String ("'");
@@ -21,16 +23,10 @@ package body Framewise.Shell is
       return To_String (Result);
    end Quote_Path;
 
-   procedure Run (Command : String; Status : out Integer; Found : out Boolean) is
+   function Arguments (Command : String) return GNAT.OS_Lib.Argument_List_Access is
       use GNAT.OS_Lib;
-      Program : GNAT.OS_Lib.String_Access := Locate_Exec_On_Path (Executable);
       Args : Argument_List_Access;
    begin
-      Status := -1;
-      Found := Program /= null;
-      if not Found then
-         return;
-      end if;
       if Is_Windows then
          --  Ignore cmd AutoRun hooks and disable delayed expansion so an
          --  exclamation mark in a quoted filename stays literal.
@@ -43,6 +39,38 @@ package body Framewise.Shell is
       else
          Args := new Argument_List'(new String'("-c"), new String'(Command));
       end if;
+      return Args;
+   end Arguments;
+
+   function Start
+     (Command : String; Output : GNAT.OS_Lib.File_Descriptor) return GNAT.OS_Lib.Process_Id
+   is
+      use GNAT.OS_Lib;
+      Program : GNAT.OS_Lib.String_Access := Locate_Exec_On_Path (Executable);
+      Args : Argument_List_Access;
+      PID : Process_Id;
+   begin
+      if Program = null then
+         return Invalid_Pid;
+      end if;
+      Args := Arguments (Command);
+      PID := Non_Blocking_Spawn (Program.all, Args.all, Output, Err_To_Out => True);
+      Free (Args);
+      Free (Program);
+      return PID;
+   end Start;
+
+   procedure Run (Command : String; Status : out Integer; Found : out Boolean) is
+      use GNAT.OS_Lib;
+      Program : GNAT.OS_Lib.String_Access := Locate_Exec_On_Path (Executable);
+      Args : Argument_List_Access;
+   begin
+      Status := -1;
+      Found := Program /= null;
+      if not Found then
+         return;
+      end if;
+      Args := Arguments (Command);
       Status := Spawn (Program.all, Args.all);
       Free (Args);
       Free (Program);

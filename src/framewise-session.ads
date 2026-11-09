@@ -10,6 +10,7 @@
 --  Export spawns ffmpeg with the plan; plan only prints it. Proxy spawns
 --  ffmpeg once per source to make the intra-only file the editor reads.
 
+with GNAT.OS_Lib;
 with Bedrock.Responses;
 with Framewise.Commands; use Framewise.Commands;
 with Framewise.Plan;
@@ -30,6 +31,16 @@ package Framewise.Session is
    function Image (R : Response) return String renames Responses.Image;
 
    function Quote_Path (File : String) return String renames Commands.Quote_Path;
+
+   type Export_Job is limited private;
+   function Export_Running (Job : Export_Job) return Boolean;
+   procedure Start_Export
+     (S : Session; Output : String; Job : in out Export_Job; R : out Response);
+   procedure Poll_Export (Job : in out Export_Job; R : out Response; Done : out Boolean);
+   --  The plan is captured at launch. Poll never changes the document and
+   --  returns FFmpeg diagnostics when the child finishes. One active job per editor.
+   function Export_Output (Line : String) return String;
+   --  Recognize a valid console export without duplicating command parsing in UI.
 
    procedure Execute (S : in out Session; Line : String; R : out Response);
 
@@ -54,6 +65,12 @@ package Framewise.Session is
      with Pre => I <= History_Length (S);
 
 private
+
+   type Export_Job is limited record
+      PID : GNAT.OS_Lib.Process_Id := GNAT.OS_Lib.Invalid_Pid;
+      Log_File : GNAT.OS_Lib.String_Access := null;
+      Output : Path;
+   end record;
 
    type History_Array is array (1 .. Max_History) of Command;
 

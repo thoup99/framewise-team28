@@ -8,6 +8,7 @@ with Adi.Widget_Styles; use Adi.Widget_Styles;
 with Adi.Widget.Text_Editor;
 with Adi.Window; use Adi.Window;
 with Timeline_View;
+with Editor_Export;
 with Editor_Context; use Editor_Context;
 with Editor_Controller;
 with Editor_Styles; use Editor_Styles;
@@ -52,7 +53,9 @@ package body Editor_Console is
 
       Editor_Controller.Execute_Console_Line (Line);
       Inputs.Set_Text (Console_Input, "");
-      Set_Focus (W, +Console_Input);
+      if not Editor_Export.Is_Open then
+         Set_Focus (W, +Console_Input);
+      end if;
    end Submit;
 
    procedure Close is

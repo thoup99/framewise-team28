@@ -14,6 +14,7 @@ with Editor_Styles; use Editor_Styles;
 with Ada.Characters.Latin_1;
 with Ada.Characters.Handling;
 with Editor_Console;
+with Editor_Export;
 with Ada.Directories;
 with Ada.Strings.Fixed;
 with Interfaces.C.Extensions;
@@ -371,6 +372,14 @@ package body Editor_Controller is
       Separator : Natural := Line'Last + 1;
       Path_First : Natural;
    begin
+      declare
+         Output : constant String := FS.Export_Output (Line);
+      begin
+         if Output'Length > 0 then
+            Editor_Export.Start (Output, Editor_Console.Console_Command, Line);
+            return;
+         end if;
+      end;
       Apply_Command (Line, Editor_Console.Console_Command);
       if not Reply.Ok then
          return;
@@ -464,7 +473,10 @@ package body Editor_Controller is
    procedure Close_Requested (Window : Window_Handle; Allow : in out Boolean) is
       pragma Unreferenced (Window);
    begin
-      if Dirty and then not Allow_Close then
+      if Editor_Export.Is_Busy then
+         Allow := False;
+         Tell ("Please wait for the export to finish before closing.");
+      elsif Dirty and then not Allow_Close then
          Allow := False;
          Request_Action (Close_Editor);
       end if;
@@ -473,10 +485,7 @@ package body Editor_Controller is
    procedure Export_Selected (Files : Adi.OS.String_Array) is
    begin
       if Files'Length > 0 and then Valid_Path (US.To_String (Files (Files'First)), "Export Video") then
-         Execute_Line ("export " & FS.Quote_Path (US.To_String (Files (Files'First))));
-         if Reply.Ok then
-            Tell ("Video exported.");
-         end if;
+         Editor_Export.Start (US.To_String (Files (Files'First)));
       end if;
    end Export_Selected;
 
@@ -704,6 +713,15 @@ package body Editor_Controller is
       use type Adi.SDL.Events.SDL_Keymod;
       Ctrl : constant Boolean := (Key_Mod and Adi.SDL.Events.SDL_KMOD_CTRL) /= 0;
    begin
+      if Editor_Export.Is_Open then
+         if Overlay_Count (W) = (if Editor_Console.Is_Open then 2 else 1) and then
+           Scancode = Adi.SDL.Events.SDL_SCANCODE_ESCAPE
+         then
+            Editor_Export.Close;
+            Handled := True;
+         end if;
+         return;
+      end if;
       if Editor_Console.Is_Open then
          --  Leave nested context menus and dialogs in charge of their keys.
          if Overlay_Count (W) = 1 then

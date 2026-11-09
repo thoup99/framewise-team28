@@ -11,6 +11,10 @@ package Framewise.Shell is
    --  Quote one filename, preserving backslashes and shell metacharacters.
    --  Windows filenames cannot contain double quotes.
 
+   function Start
+     (Command : String; Output : GNAT.OS_Lib.File_Descriptor) return GNAT.OS_Lib.Process_Id;
+   --  Redirect stdout/stderr and return immediately; caller reaps the child.
+
    procedure Run (Command : String; Status : out Integer; Found : out Boolean);
    --  Use only the host's native shell, regardless of other shells on PATH.
 end Framewise.Shell;

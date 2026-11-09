@@ -359,6 +359,103 @@ package body Framewise.Session is
       end case;
    end Execute;
 
+   function Export_Running (Job : Export_Job) return Boolean is
+      use type GNAT.OS_Lib.Process_Id;
+   begin
+      return Job.PID /= GNAT.OS_Lib.Invalid_Pid;
+   end Export_Running;
+
+   function Export_Output (Line : String) return String is
+      C : Command;
+      Ok : Boolean;
+      Err : Error_String;
+      Last : Natural;
+   begin
+      if Line'Length > Max_Line then
+         return "";
+      end if;
+      Parse (Line, C, Ok, Err, Last);
+      return (if Ok and then C.K = Export then Image (C.Out_File) else "");
+   end Export_Output;
+
+   procedure Start_Export
+     (S : Session; Output : String; Job : in out Export_Job; R : out Response)
+   is
+      use GNAT.OS_Lib;
+      Text : String (1 .. Plan.Max_Plan);
+      Last : Natural;
+      Ok : Boolean;
+      FD : File_Descriptor;
+   begin
+      if Export_Running (Job) then
+         Set (R, False, "err an export is already running");
+         return;
+      end if;
+      if Output'Length not in 1 .. Max_Path then
+         Set (R, False, "err invalid output path");
+         return;
+      end if;
+      Plan.Generate (S.Seq, S.Cfg, Output, Text, Last, Ok);
+      if not Ok then
+         Set (R, False, "err nothing to render or export plan too long");
+         return;
+      end if;
+      Create_Temp_File (FD, Job.Log_File);
+      if FD = Invalid_FD then
+         Free (Job.Log_File);
+         Set (R, False, "err cannot create export diagnostics file");
+         return;
+      end if;
+      Job.PID := Shell.Start (Text (1 .. Last), FD);
+      Close (FD);
+      if not Export_Running (Job) then
+         Delete_File (Job.Log_File.all, Ok);
+         Free (Job.Log_File);
+         Set (R, False, "err cannot start native shell for FFmpeg");
+         return;
+      end if;
+      Job.Output := To_Path (Output);
+      Set (R, True, "ok exporting " & Output);
+   end Start_Export;
+
+   procedure Poll_Export (Job : in out Export_Job; R : out Response; Done : out Boolean) is
+      use GNAT.OS_Lib;
+      PID : Process_Id;
+      Success, Deleted : Boolean;
+      F : Ada.Text_IO.File_Type;
+   begin
+      Done := False;
+      Set (R, True, "ok waiting for export");
+      if not Export_Running (Job) then
+         return;
+      end if;
+      Non_Blocking_Wait_Process (PID, Success);
+      if PID /= Job.PID then
+         return;
+      end if;
+      Job.PID := Invalid_Pid;
+      Done := True;
+      Set (R, Success, (if Success then "ok exported " else "err FFmpeg export failed: ") &
+        Image (Job.Output));
+      if not Success then
+         begin
+            Ada.Text_IO.Open (F, Ada.Text_IO.In_File, Job.Log_File.all);
+            while not Ada.Text_IO.End_Of_File (F) loop
+               Append (R, ASCII.LF & Ada.Text_IO.Get_Line (F));
+            end loop;
+            Ada.Text_IO.Close (F);
+         exception
+            when Ada.Text_IO.Name_Error | Ada.Text_IO.Use_Error =>
+               if Ada.Text_IO.Is_Open (F) then
+                  Ada.Text_IO.Close (F);
+               end if;
+               Append (R, ASCII.LF & "Cannot read FFmpeg diagnostics.");
+         end;
+      end if;
+      Delete_File (Job.Log_File.all, Deleted);
+      Free (Job.Log_File);
+   end Poll_Export;
+
    function Sequence_Of (S : Session) return Timeline.Sequence is (S.Seq);
    function Settings_Of (S : Session) return Plan.Settings is (S.Cfg);
    function History_Length (S : Session) return Natural is (S.Count);

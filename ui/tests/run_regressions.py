@@ -37,6 +37,7 @@ with Editor_Controller; use Editor_Controller;
 with Editor_Dialogs; use Editor_Dialogs;
 with Editor_Application;
 with Editor_Tooltips;
+with Editor_Export;
 
 procedure Framewise_UI_Regression is
    use type Buttons.Button_Handle;
@@ -112,7 +113,7 @@ def main():
         environment['FRAMEWISE_TEST_DIR'] = work
         run([str(executable)], cwd=REPO, env=environment)
         result = subprocess.check_output(['ffprobe', '-v', 'error', '-show_entries',
-                  'format=duration:stream=width,height', '-of', 'json', str(directory / 'export.mp4')],
+                  'format=duration:stream=width,height', '-of', 'json', str(directory / 'export final.mp4')],
                   text=True, timeout=30)
         probe = json.loads(result)
         assert 0 < float(probe['format']['duration']) < 10, probe
