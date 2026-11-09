@@ -80,7 +80,8 @@ package body Editor_Cursors is
                end if;
             end loop;
             if Has_State (+Console_Input, State_Hovered) or else
-              Has_State (+Snap_Interval_Input, State_Hovered)
+              Has_State (+Snap_Interval_Input, State_Hovered) or else
+              Has_State (+Cursor_Time_Input, State_Hovered)
             then
                Kind := Mouse.SDL_SYSTEM_CURSOR_TEXT;
             end if;

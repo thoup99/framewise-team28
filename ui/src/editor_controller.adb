@@ -128,8 +128,49 @@ package body Editor_Controller is
 
    function Read_Sequence return FS.Sequence_View is (FS.Sequence_Of (Editor));
 
+   procedure Cursor_Time_Changed (Input : Widget_Handle; Text : String) is
+      pragma Unreferenced (Input);
+      Value : Long_Float;
+      Valid : Boolean := False;
+   begin
+      if Get_Focus_Handle (W) /= Widget_Handle'(+Cursor_Time_Input) then
+         return;
+      end if;
+      begin
+         Value := Long_Float'Value (Text);
+         Valid := Value in 0.0 .. Framewise.Seconds (Framewise.Time'Last / 2);
+      exception
+         when Constraint_Error => null;
+      end;
+      Set_Part_Style (+Cursor_Time_Input, Main_Part, Style.Base
+        ((Width => Set (Size (Px (110.0))), Flex_Shrink => Set (0.0),
+          Background_Color => Set_Bg ((if Valid then RGB (38, 50, 67) else RGB (91, 39, 45))),
+          Padding => Set (CSS_Box (Px (6.0))), others => <>)).Build);
+      if Valid then
+         declare
+            V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+            Span : constant Long_Float := Long_Float'Max
+              (1.0, Long_Float (Get_Geometry (+Tracks).Width - 110.0) / V.Zoom);
+         begin
+            V.Playhead := Framewise.Time (Value * Long_Float (Framewise.Timebase));
+            if Value < V.First_Second or else Value > V.First_Second + Span then
+               V.First_Second := Long_Float'Max (0.0, Value - Span / 2.0);
+            end if;
+            Show_Preview (Timeline_View.Preview_Text (Read_Sequence, V.Playhead));
+            Mark_Dirty (+Tracks);
+         end;
+      end if;
+   end Cursor_Time_Changed;
+
    procedure Show_Preview (Text : String) is
    begin
+      if Get_Focus_Handle (W) /= Widget_Handle'(+Cursor_Time_Input) then
+         declare
+            V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+         begin
+            Inputs.Set_Text (Cursor_Time_Input, FS.Image_Time (V.Playhead));
+         end;
+      end if;
       Labels.Set_Text (Preview, Text & Ada.Characters.Latin_1.LF &
         "Video frame preview is not available yet.");
    end Show_Preview;
@@ -673,7 +714,9 @@ package body Editor_Controller is
       if Overlay_Count (W) > 0 then
          return;
       end if;
-      if Get_Focus_Handle (W) = Widget_Handle'(+Snap_Interval_Input) then
+      if Get_Focus_Handle (W) = Widget_Handle'(+Snap_Interval_Input) or else
+        Get_Focus_Handle (W) = Widget_Handle'(+Cursor_Time_Input)
+      then
          return;
       end if;
       if Repeat then

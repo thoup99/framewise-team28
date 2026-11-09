@@ -97,6 +97,7 @@ package body Editor_Layout is
    end Build_Project_Files;
 
    procedure Build_Preview is
+      Cursor_Row : constant Boxes.Box_Handle := Boxes.Create_Handle;
    begin
       Add_Label (+Monitor, "Video Preview");
       Preview := Make_Label (+Monitor, "");
@@ -146,6 +147,23 @@ package body Editor_Layout is
 
       --  Playback is intentionally unavailable until the media milestone.
       Set_State (+Play_Button, State_Disabled, True);
+      Set_Part_Style (+Cursor_Row, Main_Part, Style.Base
+        ((Row_Style with delta Justify_Content => Set (Justify_Content_Value'(Center)),
+          Align_Items => Set (Align_Items_Value'(Center)))).Build);
+      Add_Label (+Cursor_Row, "Cursor (s)");
+      Cursor_Time_Input := Inputs.Create_Handle ("0");
+      Set_Part_Style (+Cursor_Time_Input, Main_Part, Style.Base
+        ((Width => Set (Size (Px (110.0))), Flex_Shrink => Set (0.0),
+          Background_Color => Set_Bg (RGB (38, 50, 67)),
+          Padding => Set (CSS_Box (Px (6.0))), others => <>)).Build);
+      Set_Part_Style (+Cursor_Time_Input, Text_Part, Style.Base (Text_Style).Build);
+      Set_Part_Style (+Cursor_Time_Input, Cursor_Part, Style.Base
+        ((Background_Color => Set_Bg (RGB (240, 245, 255)), others => <>)).Build);
+      Inputs.Connect_Changed (Cursor_Time_Input, Cursor_Time_Changed'Access);
+      Add_Child (+Cursor_Row, +Cursor_Time_Input);
+      Editor_Tooltips.Register (+Cursor_Time_Input, "Jump to a position in seconds. Invalid values stay red.");
+
+      Add_Child (+Monitor, +Cursor_Row);
       Add_Child (+Workspace, +Bin);
       Add_Child (+Workspace, +Monitor);
    end Build_Preview;

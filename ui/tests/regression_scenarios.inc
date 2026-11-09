@@ -75,6 +75,23 @@
          end;
          Adi.Window.On_Key_Down (W, Adi.SDL.Events.SDL_SCANCODE_HOME, 0, 0, False);
 
+         Stage ("editable cursor time is validated and never enters edit history");
+         Set_Focus (W, +Cursor_Time_Input);
+         Inputs.Set_Text (Cursor_Time_Input, "");
+         Adi.Window.On_Text_Input (W, "12.5");
+         declare
+            V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+         begin
+            Check (V.Playhead = Framewise.Timebase * 25 / 2, "Cursor field jumps precisely");
+            Inputs.Set_Text (Cursor_Time_Input, "");
+         Adi.Window.On_Text_Input (W, "-2");
+            Check (V.Playhead = Framewise.Timebase * 25 / 2, "Invalid cursor input keeps prior position");
+         end;
+         Inputs.Set_Text (Cursor_Time_Input, "");
+         Adi.Window.On_Text_Input (W, "0");
+         Set_Focus (W, +Tracks);
+         Check (FS.History_Length (Editor) = 0, "Cursor field does not change history");
+
          Stage ("File menu clears a previously selected row when reopened");
          Clicked (+File_Button);
          Render (W);

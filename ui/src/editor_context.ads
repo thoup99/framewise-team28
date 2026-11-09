@@ -35,7 +35,7 @@ package Editor_Context is
    --  Widgets are owned by the window tree; handles let callbacks reach them.
    Tracks : Timeline_View.Views.Handle;
    Preview, Status, Tool_Status : Labels.Label_Handle;
-   Snap_Interval_Input : Inputs.Text_Input_Handle;
+   Cursor_Time_Input, Snap_Interval_Input : Inputs.Text_Input_Handle;
    Sources : Adi.Widget.Text_Editor.Text_Editor_Handle;
    Source_Choice, Track_Choice, Kind_Choice : Combos.Combo_Box_Handle;
    File_Menu, Clip_Menu : Menus.Menu_Handle;

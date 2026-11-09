@@ -16,6 +16,8 @@ package Editor_Controller is
    --  Surface validation failures that occur before a session command runs.
    procedure Report_Editor_Error (Action, Message : String);
 
+   procedure Cursor_Time_Changed (Input : Widget_Handle; Text : String);
+
    procedure Snap_Interval_Changed (Input : Widget_Handle; Text : String);
 
    function History return US.Unbounded_String;
