@@ -131,7 +131,6 @@ package body Editor_Export is
           others => <>)).Build);
       Progress_Label := Labels.Create_Handle ("0%");
       Set_Part_Style (+Progress_Label, Label_Part, Style.Base (Text_Style).Build);
-      Add_Child (+Content, +Progress_Label);
       Progress_Track := Boxes.Create_Handle;
       Progress_Fill := Boxes.Create_Handle;
       Set_Part_Style (+Progress_Track, Main_Part, Style.Base
@@ -139,7 +138,6 @@ package body Editor_Export is
           Flex_Shrink => Set (0.0), Background_Color => Set_Bg (RGB (38, 50, 67)),
           Border_Radius => Set (Radius (Px (3.0))), others => <>)).Build);
       Add_Child (+Progress_Track, +Progress_Fill);
-      Add_Child (+Content, +Progress_Track);
       Show_Progress;
       Output := Adi.Widget.Text_Editor.Create_Handle;
       Adi.Widget.Text_Editor.Set_Read_Only (Output);
@@ -160,6 +158,8 @@ package body Editor_Export is
         ((Width => Set (Size (Px (10.0))), Min_Height => Set (Size (Px (24.0))),
           Background_Color => Set_Bg (RGB (115, 135, 160)), others => <>)).Build);
       Add_Child (+Content, +Output);
+      Add_Child (+Content, +Progress_Label);
+      Add_Child (+Content, +Progress_Track);
       Dialogs.Set_Content (Dialog, +Content);
       Connect_Frame (W, Poll'Access);
    end Build;
