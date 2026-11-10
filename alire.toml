@@ -15,3 +15,7 @@ bedrock = "*"
 
 [[pins]]
 bedrock = { url = "https://github.com/GNAT-Academic-Program/bedrock.git" }
+
+[environment.'case(os)'.windows]
+PATH.prepend = "C:/ffmpeg/bin"
+LIBRARY_PATH.prepend = "C:/ffmpeg/lib"

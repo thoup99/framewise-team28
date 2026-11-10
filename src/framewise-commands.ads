@@ -86,6 +86,11 @@ package Framewise.Commands with SPARK_Mode is
    function Image (C : Command) return String
      with Post => Image'Result'Length <= Max_Line;
 
+   function Quote_Path (File : String) return String is ('"' & File & '"')
+     with Pre => File'Length in 1 .. Max_Path and then
+       (for all C of File => C not in '"' | ASCII.CR | ASCII.LF);
+   --  Document/console syntax, independent of the platform shell's quoting.
+
    function Image_Time (T : Time) return String;
    --  Seconds, "12.5" style, exact for any tick count (up to 5 decimals).
 
