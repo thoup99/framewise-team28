@@ -2,6 +2,8 @@ with "framewise";
 with "adi.gpr";
 
 project Ui_Checks is
+   type Platform_Kind is ("linux", "darwin", "windows");
+   Platform : Platform_Kind := external ("ADI_PLATFORM", "linux");
    for Source_Dirs use ("src", "tests");
    for Object_Dir use "obj/checks";
    for Exec_Dir use "bin";
@@ -14,8 +16,12 @@ project Ui_Checks is
    end Compiler;
 
    package Linker is
-      for Linker_Options use
-        ("-LC:/msys64/mingw64/lib");
+      case Platform is
+         when "windows" =>
+            for Linker_Options use ("-LC:/msys64/mingw64/lib");
+         when others =>
+            null;
+      end case;
    end Linker;
 
 end Ui_Checks;
