@@ -6,15 +6,324 @@ with Framewise;
 
 package body Timeline_View is
    use type Framewise.Time;
+   Gutter : constant Pixel_Type := 110.0;
+   Ruler_Height : constant Pixel_Type := 30.0;
+
+   use type Adi.SDL.Events.SDL_Keymod;
+   Snap_Distance : constant Long_Float := 10.0;  --  Screen pixels, independent of zoom.
+
+   procedure Scrub_To (W : in out Track_Widget; X : Pixel_Type);
+
+   --  Use integer ticks for all interval snapping, including decimal steps.
+   function Snap_Time (W : Track_Widget; Raw : Long_Float) return Long_Float is
+   begin
+      if (W.Drag_Modifiers and Adi.SDL.Events.SDL_KMOD_CTRL) /= 0 and then W.Snap_Interval > 0 and then
+        W.Snap_Interval <= Framewise.Time'Last / 2 and then
+        Raw <= Framewise.Seconds (Framewise.Time'Last / 2)
+      then
+         --  Round in ticks so decimal intervals and halfway values stay exact.
+         declare
+            Ticks : constant Framewise.Time := Framewise.Time (Raw * Long_Float (Framewise.Timebase));
+            Remainder : constant Framewise.Time := Ticks mod W.Snap_Interval;
+            Rounded : Framewise.Time := Ticks - Remainder;
+         begin
+            if Remainder >= W.Snap_Interval - Remainder then
+               Rounded := Rounded + W.Snap_Interval;
+            end if;
+            return Framewise.Seconds (Rounded);
+         end;
+      end if;
+      return Raw;
+   end Snap_Time;
+
+   --  Trim changes source bounds while retaining the clip's timeline anchor.
+   --  Share this calculation between the drag preview and the released edit.
+   function Trim_Position (W : Track_Widget; X : Pixel_Type) return Long_Float is
+      Bound : constant Long_Float :=
+        (if W.Drag_Trim_Left then W.Drag_Src_In else W.Drag_Src_Out);
+      Raw : constant Long_Float := Bound + Long_Float (X - W.Drag_Start_X) / W.Zoom;
+   begin
+      if Raw < 0.0 then
+         return Raw;
+      end if;
+      return Snap_Time (W, Raw);
+   end Trim_Position;
+
+   procedure Update_Drag_Modifiers
+     (W : in out Track_Widget; Modifiers : Adi.SDL.Events.SDL_Keymod)
+   is
+   begin
+      if W.Drag_Modifiers /= Modifiers then
+         W.Drag_Modifiers := Modifiers;
+         if W.Scrubbing then
+            Scrub_To (W, W.Drag_Current_X);
+         elsif W.Drag_Active then
+            Mark_Dirty (W);
+         end if;
+      end if;
+   end Update_Drag_Modifiers;
+
+   --  Preview and release share the same target calculation. Shift aligns
+   --  either edge to a valid neighbor or the playhead; Control rounds the start.
+   type Move_Target is record
+      Start : Long_Float;
+      Snapped : Boolean;
+      Edge : Long_Float;
+   end record;
+
+   function Drag_Target (W : Track_Widget; X : Pixel_Type) return Move_Target is
+      Raw : constant Long_Float := Long_Float'Max
+        (0.0, W.Drag_Start_Time + Long_Float (X - W.Drag_Start_X) / W.Zoom);
+      Shift : constant Boolean := (W.Drag_Modifiers and Adi.SDL.Events.SDL_KMOD_SHIFT) /= 0;
+   begin
+      if Shift and then W.Read_Sequence /= null then
+         declare
+            Seq : constant Framewise.Session.Sequence_View := W.Read_Sequence.all;
+         begin
+            for Track of Seq.Tracks loop
+               if Track.Used then
+                  declare
+                     Found : Boolean := False;
+                     Duration : Framewise.Time := 0;
+                     Snapped : Boolean := False;
+                     Best, Best_Edge : Framewise.Time := 0;
+                     Best_Distance : Long_Float := Snap_Distance;
+
+                     procedure Consider (Target, Edge : Framewise.Time) is
+                        Distance : constant Long_Float := abs (Framewise.Seconds (Target) - Raw) * W.Zoom;
+                     begin
+                        if Distance > Snap_Distance or else
+                          (Snapped and then Distance >= Best_Distance) or else
+                          Target > Framewise.Time'Last - Duration
+                        then
+                           return;
+                        end if;
+                        --  Do not attract a clip into another clip in a crowded gap.
+                        --  Use ticks here so touching edges are compared exactly.
+                        for I in 1 .. Track.Count loop
+                           declare
+                              Other renames Track.Clips (I);
+                           begin
+                              if Framewise.Image (Other.N) /= To_String (W.Drag_Name) and then
+                                Target < Other.Start + (Other.Src_Out - Other.Src_In) and then
+                                Other.Start < Target + Duration
+                              then
+                                 return;
+                              end if;
+                           end;
+                        end loop;
+                        Snapped := True;
+                        Best := Target;
+                        Best_Edge := Edge;
+                        Best_Distance := Distance;
+                     end Consider;
+                  begin
+                     for I in 1 .. Track.Count loop
+                        if Framewise.Image (Track.Clips (I).N) = To_String (W.Drag_Name) then
+                           Found := True;
+                           Duration := Track.Clips (I).Src_Out - Track.Clips (I).Src_In;
+                           exit;
+                        end if;
+                     end loop;
+                     if Found then
+                        for I in 1 .. Track.Count loop
+                           declare
+                              Other renames Track.Clips (I);
+                           begin
+                              if Framewise.Image (Other.N) /= To_String (W.Drag_Name) then
+                                 Consider (Other.Start + (Other.Src_Out - Other.Src_In),
+                                           Other.Start + (Other.Src_Out - Other.Src_In));
+                                 if Other.Start >= Duration then
+                                    Consider (Other.Start - Duration, Other.Start);
+                                 end if;
+                              end if;
+                           end;
+                        end loop;
+                        --  Either edge may meet the playhead. Use the same
+                        --  distance and overlap checks as neighboring clips.
+                        Consider (W.Playhead, W.Playhead);
+                        if W.Playhead >= Duration then
+                           Consider (W.Playhead - Duration, W.Playhead);
+                        end if;
+                        if Snapped then
+                           return (Framewise.Seconds (Best), True, Framewise.Seconds (Best_Edge));
+                        end if;
+                        exit;
+                     end if;
+                  end;
+               end if;
+            end loop;
+         end;
+      end if;
+      declare
+         Start : constant Long_Float := Snap_Time (W, Raw);
+         Grid : constant Boolean := W.Snap_Interval > 0 and then
+           (W.Drag_Modifiers and Adi.SDL.Events.SDL_KMOD_CTRL) /= 0;
+      begin
+         return (Start, Grid, Start);
+      end;
+   end Drag_Target;
+
+   function Drag_Position (W : Track_Widget; X : Pixel_Type) return Long_Float is
+     (Drag_Target (W, X).Start);
+
+   procedure Set_Razor_Pointer (W : in out Track_Widget;
+      X, Y : Pixel_Type; Active : Boolean) is
+      Show : constant Boolean := Active and then W.Razor_Mode;
+   begin
+      if W.Razor_Hover /= Show or else
+        (Show and then (W.Razor_X /= X or else W.Razor_Y /= Y))
+      then
+         W.Razor_Hover := Show;
+         W.Razor_X := X;
+         W.Razor_Y := Y;
+         Mark_Dirty (W);
+      end if;
+   end Set_Razor_Pointer;
+
+   function Clip_At (W : Track_Widget; X, Y : Pixel_Type) return String is
+      G : constant Rectangle := Get_Geometry (W);
+      Left : constant Pixel_Type := G.X + Gutter;
+      Right : constant Pixel_Type := G.X + G.Width;
+      Row : Pixel_Type := G.Y + Ruler_Height;
+   begin
+      if W.Read_Sequence = null or else W.Zoom <= 0.0 or else
+        X < Left or else X > Right or else Y < Row or else Y > G.Y + G.Height
+      then
+         return "";
+      end if;
+      for Track of W.Read_Sequence.all.Tracks loop
+         if Track.Used then
+            if Y >= Row + 4.0 and then Y <= Row + 40.0 then
+               for I in 1 .. Track.Count loop
+                  declare
+                     C renames Track.Clips (I);
+                     X1 : constant Pixel_Type := Left + Pixel_Type
+                       ((Framewise.Seconds (C.Start) - W.First_Second) * W.Zoom);
+                     X2 : constant Pixel_Type := X1 + Pixel_Type
+                       (Framewise.Seconds (C.Src_Out - C.Src_In) * W.Zoom);
+                  begin
+                     if X >= Pixel_Type'Max (Left, X1) and then X <= Pixel_Type'Min (Right, X2) then
+                        return Framewise.Image (C.N);
+                     end if;
+                  end;
+               end loop;
+            end if;
+            Row := Row + 48.0;
+         end if;
+      end loop;
+      return "";
+   end Clip_At;
+
+   function Cursor_At (W : Track_Widget; X, Y : Pixel_Type)
+      return Adi.SDL.Mouse.SDL_SystemCursor
+   is
+      use Adi.SDL.Mouse;
+      G : constant Rectangle := Get_Geometry (W);
+      Left : constant Pixel_Type := G.X + Gutter;
+      Right : constant Pixel_Type := G.X + G.Width;
+      Row : Pixel_Type := G.Y + Ruler_Height;
+   begin
+      if W.Scrubbing then
+         return SDL_SYSTEM_CURSOR_EW_RESIZE;
+      elsif W.Drag_Active then
+         return (if W.Drag_Trim_Left or W.Drag_Trim_Right
+                 then SDL_SYSTEM_CURSOR_EW_RESIZE else SDL_SYSTEM_CURSOR_MOVE);
+      end if;
+      if W.Read_Sequence = null or else X < Left or else X > Right
+        or else Y < G.Y or else Y > G.Y + G.Height
+      then
+         return SDL_SYSTEM_CURSOR_DEFAULT;
+      end if;
+      if Y < Row then
+         return SDL_SYSTEM_CURSOR_EW_RESIZE;
+      end if;
+      for T of W.Read_Sequence.all.Tracks loop
+         if T.Used then
+            if Y >= Row + 4.0 and then Y <= Row + 40.0 then
+               for I in 1 .. T.Count loop
+                  declare
+                     C renames T.Clips (I);
+                     X1 : constant Pixel_Type := Left + Pixel_Type
+                       ((Framewise.Seconds (C.Start) - W.First_Second) * W.Zoom);
+                     X2 : constant Pixel_Type := X1 + Pixel_Type
+                       (Framewise.Seconds (C.Src_Out - C.Src_In) * W.Zoom);
+                  begin
+                     if X >= Pixel_Type'Max (Left, X1) and then X <= Pixel_Type'Min (Right, X2) then
+                        if W.Razor_Mode then
+                           return SDL_SYSTEM_CURSOR_DEFAULT;
+                        elsif (X1 >= Left and then X <= X1 + 8.0) or else
+                          (X2 <= Right and then X >= X2 - 8.0)
+                        then
+                           return SDL_SYSTEM_CURSOR_EW_RESIZE;
+                        end if;
+                        return SDL_SYSTEM_CURSOR_MOVE;
+                     end if;
+                  end;
+               end loop;
+            end if;
+            Row := Row + 48.0;
+         end if;
+      end loop;
+      return SDL_SYSTEM_CURSOR_DEFAULT;
+   end Cursor_At;
+
+   function Preview_Text
+     (Seq : Framewise.Session.Sequence_View; At_Time : Framewise.Time) return String
+   is
+      use all type Framewise.Session.Media_Kind;
+      Stamp : constant String := Framewise.Session.Image_Time (At_Time) & " s";
+   begin
+      for Track of Seq.Tracks loop
+         --  Export uses the first populated video-capable track.
+         if Track.Used and then Natural (Track.Count) > 0 and then Track.Kind /= Audio then
+            for I in 1 .. Track.Count loop
+               declare
+                  C renames Track.Clips (I);
+               begin
+                  if At_Time >= C.Start and then At_Time - C.Start < C.Src_Out - C.Src_In then
+                     return Framewise.Image (C.N) & " | " & Stamp;
+                  end if;
+               end;
+            end loop;
+            exit;
+         end if;
+      end loop;
+      return "No video clip | " & Stamp;
+   end Preview_Text;
+
+   procedure Set_Playhead (W : in out Track_Widget; Position : Framewise.Time) is
+   begin
+      W.Playhead := Position;
+      if W.Preview_Changed /= null and then W.Read_Sequence /= null then
+         W.Preview_Changed.all (Preview_Text (W.Read_Sequence.all, Position));
+      end if;
+      Mark_Dirty (W);
+   end Set_Playhead;
+
+   procedure Scrub_To (W : in out Track_Widget; X : Pixel_Type) is
+      G : constant Rectangle := Get_Geometry (W);
+      Offset : constant Pixel_Type :=
+        Pixel_Type'Max (0.0, Pixel_Type'Min (X - G.X, G.Width) - Gutter);
+   begin
+      W.Drag_Current_X := X;
+      Set_Playhead (W, Framewise.Time
+        (Long_Float'Min (Long_Float (Framewise.Time'Last),
+         Snap_Time (W, W.First_Second + Long_Float (Offset) / W.Zoom) * Long_Float (Framewise.Timebase))));
+   end Scrub_To;
+
    overriding procedure Build_Items (W : in out Track_Widget) is
       use type Framewise.Time;
       G : constant Rectangle := Get_Geometry (W);
-      Left : constant Pixel_Type := G.X + 110.0;
+      Left : constant Pixel_Type := G.X + Gutter;
       Right : constant Pixel_Type := G.X + G.Width;
-      Y : Pixel_Type := G.Y + 30.0;
+      Y : Pixel_Type := G.Y + Ruler_Height;
+      Ghost_Visible : Boolean := False;
+      Ghost_Area : Rectangle;
+      Ghost_Name : Unbounded_String;
 
-      procedure Label (Area : Rectangle; Text : String) is
-         I : Item := Make_Text (Label_Part, Area, Text, 2);
+      procedure Label (Area : Rectangle; Text : String; Z_Order : Natural := 2) is
+         I : Item := Make_Text (Label_Part, Area, Text, Z_Order);
       begin
          I.Wrap_Text := False;
          Add_Item (W, I);
@@ -22,7 +331,7 @@ package body Timeline_View is
    begin
       Clear_Items (W);
       Add_Item (W, Make_Panel (Main_Part, G, 0));
-      if W.Read_Sequence = null or else G.Width <= 110.0 then
+      if W.Read_Sequence = null or else G.Width <= Gutter then
          return;
       end if;
       declare
@@ -45,7 +354,15 @@ package body Timeline_View is
          for Track of Seq.Tracks loop
             if Track.Used then
                Any_Track := True;
-               Label ((G.X + 8.0, Y + 8.0, 100.0, 28.0), Framewise.Image (Track.N));
+               Add_Item (W, Make_Panel (Custom_Part,
+                 (G.X, Y + 1.0, G.Width, 44.0), 0));
+               --  Keep the media type below the name so it remains readable
+               --  in the fixed track header without changing clip geometry.
+               Label ((G.X + 8.0, Y + 3.0, 100.0, 20.0), Framewise.Image (Track.N));
+               Label ((G.X + 8.0, Y + 24.0, 100.0, 18.0),
+                 (if Track.Kind'Image = "VIDEO" then "Video"
+                  elsif Track.Kind'Image = "AUDIO" then "Audio"
+                  else "Video + Audio"));
                for I in 1 .. Track.Count loop
                   declare
                      C renames Track.Clips (I);
@@ -76,6 +393,33 @@ package body Timeline_View is
                                  24.0),
                                  Framewise.Image (C.N));                     
                      end if;
+                  --  Use the same timeline-to-ticks mapping as the click
+                  --  handler; only show cuts strictly inside the clip.
+                  if W.Razor_Mode and then W.Razor_Hover and then
+                    W.Razor_Y >= Y + 4.0 and then W.Razor_Y <= Y + 40.0
+                    and then W.Razor_X >= Visible_Left
+                    and then W.Razor_X < Visible_Right and then W.Zoom > 0.0
+                  then
+                     declare
+                        Seconds : constant Long_Float := W.First_Second +
+                          Long_Float (W.Razor_X - Left) / W.Zoom;
+                     begin
+                        if Seconds >= 0.0 and then Seconds <
+                          Framewise.Seconds (Framewise.Time'Last / 2)
+                        then
+                           declare
+                              Cut : constant Framewise.Time := Framewise.Time
+                                (Seconds * Long_Float (Framewise.Timebase));
+                           begin
+                              if Cut > C.Start and then Cut - C.Start < C.Src_Out - C.Src_In then
+                                 Add_Item (W, Make_Panel (Cursor_Part,
+                                   (W.Razor_X, Y + 4.0,
+                                    Pixel_Type'Min (2.0, Visible_Right - W.Razor_X), 36.0), 5));
+                              end if;
+                           end;
+                        end if;
+                     end;
+                  end if;
                   -- Show a temporary ghost while moving or trimming a clip.
                   -- This is only visual UI state. The real timeline is not changed
                   -- until On_Mouse_Up sends the move command.
@@ -83,26 +427,20 @@ package body Timeline_View is
                      and then To_String (W.Drag_Name) = Framewise.Image (C.N)
                   then
                      declare
-                        Delta_Seconds : constant Long_Float :=
-                           Long_Float
-                              (W.Drag_Current_X - W.Drag_Start_X) / W.Zoom;
-                        
                         Preview_Start : Long_Float := W.Drag_Start_Time;
                         Preview_In    : Long_Float := W.Drag_Src_In;
                         Preview_Out   : Long_Float := W.Drag_Src_Out;
                      begin
                         if W.Drag_Trim_Left then
                            Preview_In :=
-                              W.Drag_Src_In + Delta_Seconds;
+                              Trim_Position (W, W.Drag_Current_X);
                         
                         elsif W.Drag_Trim_Right then
                            Preview_Out :=
-                              W.Drag_Src_Out + Delta_Seconds;
+                              Trim_Position (W, W.Drag_Current_X);
 
                         else
-                           Preview_Start :=
-                              Long_Float'Max
-                                 (0.0, W.Drag_Start_Time + Delta_Seconds);
+                           Preview_Start := Drag_Position (W, W.Drag_Current_X);
                         end if;
 
                         if Preview_In >= 0.0
@@ -128,23 +466,9 @@ package body Timeline_View is
                                        (Long_Float (Right - Left), Preview_X2));
                            begin
                               if Ghost_Right > Ghost_Left then
-                                 Add_Item
-                                    (W,
-                                    Make_Panel
-                                       (Selected_Part,
-                                       (Ghost_Left,
-                                       Y + 4.0,
-                                       Ghost_Right - Ghost_Left,
-                                       36.0),
-                                       3));
-
-                                 Label
-                                    ((Ghost_Left + 3.0,
-                                    Y + 10.0,
-                                    Pixel_Type'Max
-                                       (0.0, Ghost_Right - Ghost_Left - 6.0),
-                                       24.0),
-                                       Framewise.Image (C.N));
+                                 Ghost_Visible := True;
+                                 Ghost_Area := (Ghost_Left, Y + 4.0, Ghost_Right - Ghost_Left, 36.0);
+                                 Ghost_Name := To_Unbounded_String (Framewise.Image (C.N));
                               end if;
                            end;
                   end if;      
@@ -155,11 +479,85 @@ package body Timeline_View is
                Y := Y + 48.0;
             end if;
          end loop;
+         --  Adi paints items in insertion order, so defer the dragged clip
+         --  until every other clip (including its text) has been added.
+         if Ghost_Visible then
+            Add_Item (W, Make_Panel (Selected_Part, Ghost_Area, 3));
+            Label ((Ghost_Area.X + 3.0, Ghost_Area.Y + 6.0,
+              Pixel_Type'Max (0.0, Ghost_Area.Width - 6.0), 24.0), To_String (Ghost_Name), 4);
+         end if;
+         X := Left + Pixel_Type ((Framewise.Seconds (W.Playhead) - W.First_Second) * W.Zoom);
+         if X >= Left and then X < Right then
+            Add_Item (W, Make_Panel (Selected_Part,
+              (X, G.Y, Pixel_Type'Min (2.0, Right - X), G.Height), 5));
+         end if;
+         if W.Drag_Active and then not W.Drag_Trim_Left and then not W.Drag_Trim_Right then
+            declare
+               Target : constant Move_Target := Drag_Target (W, W.Drag_Current_X);
+               Guide : constant Pixel_Type := Left + Pixel_Type ((Target.Edge - W.First_Second) * W.Zoom);
+            begin
+               if Target.Snapped and then Guide >= Left and then Guide < Right then
+                  --  Draw last so the target stays visible over every clip.
+                  Add_Item (W, Make_Panel (Items_Part,
+                    (Guide, G.Y, Pixel_Type'Min (2.0, Right - Guide), G.Height), 6));
+                  Label ((Pixel_Type'Min (Guide + 5.0, Right - 150.0), G.Y, 145.0, 25.0),
+                    "Snap: " & Framewise.Session.Image_Time
+                      (Framewise.Time (Target.Edge * Long_Float (Framewise.Timebase))) & " s", 7);
+               end if;
+            end;
+         end if;
          if not Any_Track then
-            Label ((Left, Y, Right - Left, 30.0), "No tracks. Load a project below.");
+            Label ((Left, Y, Right - Left, 30.0), "No tracks. Use Add Track to begin.");
          end if;
       end;
    end Build_Items;
+
+   --  Keep razor command construction separate from pointer hit testing.
+   --  The session validates the resulting split; the UI only rejects endpoints
+   --  and picks a name that is unused by the current document's clips.
+   procedure Try_Split
+     (W : Track_Widget; Seq : Framewise.Session.Sequence_View;
+      Name : String; Start, Length : Framewise.Time; At_Second : Long_Float)
+   is
+      Cut : Framewise.Time;
+   begin
+      if W.Submit_Command = null or else At_Second < 0.0 or else
+        At_Second >= Framewise.Seconds (Framewise.Time'Last / 2)
+      then
+         return;
+      end if;
+
+      Cut := Framewise.Time (At_Second * Long_Float (Framewise.Timebase));
+      if Cut <= Start or else Cut - Start >= Length then
+         return;
+      end if;
+
+      for N in 1 .. 9999 loop
+         declare
+            New_Name : constant String :=
+              "r" & Ada.Strings.Fixed.Trim (Positive'Image (N), Ada.Strings.Left);
+            Taken : Boolean := False;
+         begin
+            for Track of Seq.Tracks loop
+               if Track.Used then
+                  for I in 1 .. Track.Count loop
+                     if Framewise.Image (Track.Clips (I).N) = New_Name then
+                        Taken := True;
+                        exit;
+                     end if;
+                  end loop;
+               end if;
+               exit when Taken;
+            end loop;
+
+            if not Taken then
+               W.Submit_Command.all
+                 ("split " & Name & " " & Framewise.Session.Image_Time (Cut) & " " & New_Name);
+               return;
+            end if;
+         end;
+      end loop;
+   end Try_Split;
 
    overriding procedure On_Mouse_Down
      (W      : in out Track_Widget;
@@ -169,30 +567,32 @@ package body Timeline_View is
    is
       pragma Unreferenced (Clicks);
       G     : constant Rectangle := Get_Geometry (W);
-      Left  : constant Pixel_Type := G.X + 110.0;
+      Left  : constant Pixel_Type := G.X + Gutter;
       Right : constant Pixel_Type := G.X + G.Width;
-      Row_Y : Pixel_Type := G.Y + 30.0;
+      Row_Y : Pixel_Type := G.Y + Ruler_Height;
    begin
-
-   W.Drag_Active := False;
-   W.Drag_Trim_Left := False;
-   W.Drag_Trim_Right := False;
-
-   if not W.Razor_Mode then
-      W.Selected_Clip := Null_Unbounded_String;
-
-      if W.Selection_Changed /= null then
-         W.Selection_Changed.all ("");
-      end if;
-   end if;
-
-      if Button /= Left_Button
-        or else W.Read_Sequence = null
-        or else W.Zoom <= 0.0
-        or else X < Left
-        or else X > Right
-      then
+      if Button /= Left_Button then
          return;
+      end if;
+      W.Scrubbing := False;
+      W.Drag_Active := False;
+      W.Drag_Trim_Left := False;
+      W.Drag_Trim_Right := False;
+      Update_Drag_Modifiers (W, Adi.SDL.Events.SDL_GetModState);
+      if W.Read_Sequence = null or else W.Zoom <= 0.0 or else X < Left or else X > Right then
+         return;
+      end if;
+      if Y >= G.Y and then Y < Row_Y then
+         W.Scrubbing := True;
+         Scrub_To (W, X);
+         return;
+      end if;
+
+      if not W.Razor_Mode then
+         W.Selected_Clip := Null_Unbounded_String;
+         if W.Selection_Changed /= null then
+            W.Selection_Changed.all ("");
+         end if;
       end if;
 
       declare
@@ -217,73 +617,21 @@ package body Timeline_View is
                         if X >= Pixel_Type'Max (Left, Clip_X1)
                           and then X <= Pixel_Type'Min (Right, Clip_X2)
                         then
-   if not W.Razor_Mode then
-      W.Selected_Clip :=
-         To_Unbounded_String (Framewise.Image (C.N));
+                           if not W.Razor_Mode then
+                              W.Selected_Clip :=
+                                 To_Unbounded_String (Framewise.Image (C.N));
 
-      if W.Selection_Changed /= null then
-         W.Selection_Changed.all (Framewise.Image (C.N));
-      end if;
-   end if;
-   --  In Razor Mode, a click splits the clip instead of dragging it.
-   if W.Razor_Mode then
-      if W.Submit_Command /= null then
-         declare
-            Cut_Seconds : constant Long_Float :=
-              W.First_Second + Long_Float (X - Left) / W.Zoom;
-         begin
-            if Cut_Seconds >= 0.0
-              and then Cut_Seconds <
-                Long_Float (Framewise.Time'Last / 2) /
-                Long_Float (Framewise.Timebase)
-            then
-               declare
-                  Cut : constant Framewise.Time :=
-                    Framewise.Time
-                      (Cut_Seconds * Long_Float (Framewise.Timebase));
-               begin
-                  --  The cut must be strictly inside the clip.
-                  if Cut > C.Start
-                    and then Cut - C.Start < C.Src_Out - C.Src_In
-                  then
-                     --  Find an unused name for the right-hand clip.
-                     for N in 1 .. 9999 loop
-                        declare
-                           New_Name : constant String :=
-                             "r" & Ada.Strings.Fixed.Trim
-                               (Positive'Image (N), Ada.Strings.Left);
-                           Taken : Boolean := False;
-                        begin
-                           for Other_Track of Seq.Tracks loop
-                              if Other_Track.Used then
-                                 for J in 1 .. Other_Track.Count loop
-                                    if Framewise.Image
-                                      (Other_Track.Clips (J).N) = New_Name
-                                    then
-                                       Taken := True;
-                                       exit;
-                                    end if;
-                                 end loop;
+                              if W.Selection_Changed /= null then
+                                 W.Selection_Changed.all (Framewise.Image (C.N));
                               end if;
-                              exit when Taken;
-                           end loop;
-
-                           if not Taken then
-                              W.Submit_Command.all
-                                ("split " & Framewise.Image (C.N) & " " &
-                                 Framewise.Session.Image_Time (Cut) &
-                                 " " & New_Name);
+                           end if;
+                           --  Razor clicks split; selection clicks begin a drag.
+                           if W.Razor_Mode then
+                              Try_Split (W, Seq, Framewise.Image (C.N), C.Start,
+                                C.Src_Out - C.Src_In,
+                                W.First_Second + Long_Float (X - Left) / W.Zoom);
                               return;
                            end if;
-                        end;
-                     end loop;
-                  end if;
-               end;
-            end if;
-         end;
-      end if;
-      return;
-   end if;
 
                            W.Drag_Name :=
                              To_Unbounded_String (Framewise.Image (C.N));
@@ -293,17 +641,17 @@ package body Timeline_View is
                            W.Drag_Src_In := Framewise.Seconds (C.Src_In);
                            W.Drag_Src_Out := Framewise.Seconds (C.Src_Out);
 
-                        -- First/last 8 pixels act as trim handles.
-                        -- A clipped-off edge is not treated as a handle.
-                        W.Drag_Trim_Left :=
-                           Clip_X1 >= Left and then X <= Clip_X1 + 8.0;
+                           --  First/last 8 pixels act as trim handles.
+                           --  A clipped-off edge is not treated as a handle.
+                           W.Drag_Trim_Left :=
+                              Clip_X1 >= Left and then X <= Clip_X1 + 8.0;
 
-                        W.Drag_Trim_Right :=
-                           not W.Drag_Trim_Left
-                           and then Clip_X2 <= Right
-                           and then X >= Clip_X2 - 8.0;
+                           W.Drag_Trim_Right :=
+                              not W.Drag_Trim_Left
+                              and then Clip_X2 <= Right
+                              and then X >= Clip_X2 - 8.0;
 
-                        W.Drag_Active := True;
+                           W.Drag_Active := True;
                            return;
                         end if;
                      end;
@@ -319,9 +667,13 @@ package body Timeline_View is
       (W   : in out Track_widget;
       X, Y : Pixel_Type)
    is
-      pragma Unreferenced (Y);
    begin
-      if W.Drag_Active then
+      Set_Razor_Pointer (W, X, Y, True);
+      if W.Scrubbing then
+         Update_Drag_Modifiers (W, Adi.SDL.Events.SDL_GetModState);
+         Scrub_To (W, X);
+      elsif W.Drag_Active then
+         Update_Drag_Modifiers (W, Adi.SDL.Events.SDL_GetModState);
          W.Drag_Current_X := X;
          Mark_Dirty (W);
       end if;
@@ -335,10 +687,17 @@ package body Timeline_View is
       pragma Unreferenced (Y);
       New_Time : Long_Float;
    begin
+      if Button = Left_Button and then W.Scrubbing then
+         Update_Drag_Modifiers (W, Adi.SDL.Events.SDL_GetModState);
+         W.Scrubbing := False;
+         Scrub_To (W, X);
+         return;
+      end if;
       if Button /= Left_Button or else not W.Drag_Active then
          return;
       end if;
       
+      Update_Drag_Modifiers (W, Adi.SDL.Events.SDL_GetModState);
       W.Drag_Current_X := X;
       W.Drag_Active := False;
       Mark_Dirty(W);
@@ -354,8 +713,7 @@ package body Timeline_View is
       if W.Drag_Trim_Left then
          -- Dragging the left edge changes the source in-point.
          New_Time :=
-            W.Drag_Src_In +
-            Long_Float (X - W.Drag_Start_X) / W.Zoom;
+            Trim_Position (W, X);
 
          if New_Time < 0.0
             or else New_Time >= W.Drag_Src_Out
@@ -376,8 +734,7 @@ package body Timeline_View is
       elsif W.Drag_Trim_Right then
          --  Dragging the right edge changes the source out-point.
          New_Time :=
-           W.Drag_Src_Out +
-           Long_Float (X - W.Drag_Start_X) / W.Zoom;
+           Trim_Position (W, X);
 
          if New_Time <= W.Drag_Src_In
            or else New_Time >
@@ -398,9 +755,7 @@ package body Timeline_View is
                  (New_Time * Long_Float (Framewise.Timebase))));
       else
          --  Dragging the body still moves the entire clip.
-         New_Time := Long_Float'Max
-           (0.0, W.Drag_Start_Time +
-            Long_Float (X - W.Drag_Start_X) / W.Zoom);
+         New_Time := Drag_Position (W, X);
 
          if New_Time >
            Long_Float (Framewise.Time'Last / 2) /
@@ -417,5 +772,23 @@ package body Timeline_View is
       end if;
 
    end On_Mouse_Up;
+
+   overriding procedure On_Key_Down
+     (W : in out Track_Widget; Scancode : Adi.SDL.Events.SDL_Scancode;
+      Key_Mod : Adi.SDL.Events.SDL_Keymod; Repeat : Boolean)
+   is
+      pragma Unreferenced (Scancode, Repeat);
+   begin
+      Update_Drag_Modifiers (W, Key_Mod);
+   end On_Key_Down;
+
+   overriding procedure On_Key_Up
+     (W : in out Track_Widget; Scancode : Adi.SDL.Events.SDL_Scancode;
+      Key_Mod : Adi.SDL.Events.SDL_Keymod; Repeat : Boolean)
+   is
+      pragma Unreferenced (Scancode, Repeat);
+   begin
+      Update_Drag_Modifiers (W, Key_Mod);
+   end On_Key_Up;
 
 end Timeline_View;

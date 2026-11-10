@@ -49,6 +49,8 @@ jobs:
           ffmpeg -loglevel error -y -f lavfi -i sine=frequency=440 -t 60 music.wav
           ../cli/bin/framewise_cli -c "load cut.fw" -c "export out.mp4"
           ffprobe -v error -show_entries format=duration -of csv=p=0 out.mp4 | grep -q '^22\.'
+      - name: Export and proxy preserve shell-sensitive paths
+        run: python3 tests/check_shell_paths.py cli/bin/framewise_cli --jobs tests/bin/export_job_tests
       - name: JPEG reference frame and header
         run: |
           cd examples
@@ -77,6 +79,7 @@ jobs:
 
   gui-tests:
     name: GUI interaction tests
+    timeout-minutes: 30
     runs-on: ubuntu-26.04
 
     steps:
@@ -90,6 +93,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            ffmpeg \
             libsdl3-dev \
             libsdl3-ttf-dev \
             libsdl3-image-dev \
@@ -111,4 +115,29 @@ jobs:
         working-directory: ui
         env:
           SDL_VIDEODRIVER: dummy
-        run: ./bin/timeline_view_tests
+          SDL_RENDER_DRIVER: software
+        run: |
+          ./bin/timeline_view_tests
+          ./bin/editor_split_tests
+          python3 tests/run_layout_regressions.py --executable bin/editor_preferences_tests
+
+      - name: Build CLI for GUI document comparison
+        working-directory: cli
+        run: alr -n build
+
+      - name: Run editor workflow regressions
+        working-directory: ui
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_RENDER_DRIVER: software
+        run: python3 tests/run_regressions.py 2>&1 | tee regression.log
+
+      - name: Upload GUI regression diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gui-regression-diagnostics
+          path: |
+            ui/regression.log
+            ui/obj/regression-driver/framewise_ui_regression.adb
+            ui/obj/regression-driver/regressions.gpr

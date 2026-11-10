@@ -1,7 +1,10 @@
+with Framewise.Shell;
+
 package body Framewise.Plan is
 
    function Sec (T : Time) return String;
    function Img (N : Natural) return String;
+   procedure Select_Tracks (S : Sequence; VT, ATr : out Track_Id);
 
    function Sec (T : Time) return String is
       --  Seconds with 5 decimals, enough for 90 kHz ticks to be exact
@@ -20,13 +23,43 @@ package body Framewise.Plan is
       return S (S'First + 1 .. S'Last);
    end Img;
 
+   procedure Select_Tracks (S : Sequence; VT, ATr : out Track_Id) is
+   begin
+      VT := 0;
+      ATr := 0;
+      for T in S.Tracks'Range loop
+         if S.Tracks (T).Used and then S.Tracks (T).Count > 0 then
+            if VT = 0 and then S.Tracks (T).Kind in Video | Both then
+               VT := T;
+            elsif ATr = 0 and then S.Tracks (T).Kind in Audio | Both then
+               ATr := T;
+            end if;
+         end if;
+      end loop;
+   end Select_Tracks;
+
+   function Output_Duration (S : Sequence) return Time is
+      VT, ATr : Track_Id;
+      Result : Time := 0;
+   begin
+      Select_Tracks (S, VT, ATr);
+      if VT /= 0 then
+         Result := Track_End (S, VT);
+      end if;
+      if ATr /= 0 then
+         Result := Time'Max (Result, Track_End (S, ATr));
+      end if;
+      return Result;
+   end Output_Duration;
+
    procedure Generate
      (S      : Sequence;
       Cfg    : Settings;
       Output : String;
       Plan   : out String;
       Last   : out Natural;
-      Ok     : out Boolean)
+      Ok     : out Boolean;
+      Progress_File : String := "")
    is
       P : Natural := Plan'First - 1;
 
@@ -98,16 +131,7 @@ package body Framewise.Plan is
       Last := Plan'First - 1;
       Plan := [others => ' '];
 
-      --  Pick tracks.
-      for T in S.Tracks'Range loop
-         if S.Tracks (T).Used and then S.Tracks (T).Count > 0 then
-            if VT = 0 and then S.Tracks (T).Kind in Video | Both then
-               VT := T;
-            elsif ATr = 0 and then S.Tracks (T).Kind in Audio | Both then
-               ATr := T;
-            end if;
-         end if;
-      end loop;
+      Select_Tracks (S, VT, ATr);
       if VT = 0 then
          Ok := False;
          return;
@@ -115,6 +139,9 @@ package body Framewise.Plan is
 
       --  Inputs: every source used by a chosen track, in table order.
       Put ("ffmpeg -y -hide_banner -loglevel error");
+      if Progress_File'Length > 0 then
+         Put (" -nostats -stats_period 0.2 -progress " & Shell.Quote_Path (Progress_File));
+      end if;
       for Src in S.Sources'Range loop
          if S.Sources (Src).Used then
             declare
@@ -132,7 +159,7 @@ package body Framewise.Plan is
                if Used then
                   Input_Of (Src) := Inputs;
                   Inputs := Inputs + 1;
-                  Put (" -i " & Image (S.Sources (Src).File));
+                  Put (" -i " & Shell.Quote_Path (Image (S.Sources (Src).File)));
                end if;
             end;
          end if;
@@ -151,7 +178,7 @@ package body Framewise.Plan is
       if ATr /= 0 then
          Put (" -map ""[aout]""");
       end if;
-      Put (" -r " & Img (Cfg.FPS) & " -pix_fmt yuv420p " & Output);
+      Put (" -r " & Img (Cfg.FPS) & " -pix_fmt yuv420p " & Shell.Quote_Path (Output));
       Last := P;
    end Generate;
 

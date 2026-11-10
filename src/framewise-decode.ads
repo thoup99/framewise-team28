@@ -37,6 +37,7 @@
 --  commands, session and plan are complete without it; the tool works
 --  as an EDL editor with ffmpeg doing the rendering.
 
+with Ada.Streams.Stream_IO;
 with Framewise.ISOBMFF;
 
 package Framewise.Decode is
@@ -62,6 +63,7 @@ package Framewise.Decode is
 private
    type Handle is limited record
       Opened : Boolean := False;
+      File   : Ada.Streams.Stream_IO.File_Type;
       Map    : ISOBMFF.File_Map;
    end record;
 end Framewise.Decode;

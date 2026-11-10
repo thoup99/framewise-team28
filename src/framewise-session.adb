@@ -1,5 +1,8 @@
 with Ada.Text_IO;
-with GNAT.OS_Lib;
+with Ada.Streams.Stream_IO;
+with Ada.Unchecked_Deallocation;
+with Framewise.Shell;
+with Framewise.Decode;
 
 package body Framewise.Session is
 
@@ -13,9 +16,11 @@ package body Framewise.Session is
    procedure Do_Info (S : Session; N : Name; R : out Response);
    procedure Do_Plan (S : Session; Output : String; R : out Response; Run : Boolean);
    procedure Do_Proxy (S : Session; N : Name; R : out Response);
-   procedure Run_Shell (Cmd : String; Status : out Integer; Found : out Boolean);
    procedure Do_Save (S : Session; File : String; R : out Response);
    procedure Do_Load (S : in out Session; File : String; R : out Response);
+
+   procedure Read_Export_Progress (Job : in out Export_Job);
+   procedure Delete_Export_File (File : in out GNAT.OS_Lib.String_Access);
 
    function To_TL (K : Commands.Media_Kind) return Timeline.Media_Kind is
      (case K is when Commands.Video => Timeline.Video,
@@ -30,14 +35,70 @@ package body Framewise.Session is
       Ok : Boolean := False;
    begin
       case C.K is
-         when Import =>
+                  when Import =>
             if C.Length = 0 then
-               Set (R, False, "err length must be > 0 (probe is a milestone)");
-               return;
+               declare
+                  Length     : Duration_T;
+                  Has_Video  : Boolean;
+                  Has_Audio  : Boolean;
+                  Probe_Ok   : Boolean;
+                  Media      : Timeline.Media_Kind;
+                  Proxy_File : constant String :=
+                    Image (C.File) & ".proxy.mov";
+               begin
+                  Framewise.Decode.Probe
+                    (Proxy_File,
+                     Length,
+                     Has_Video,
+                     Has_Audio,
+                     Probe_Ok);
+
+                  if not Probe_Ok then
+                     Set
+                       (R,
+                        False,
+                        "err cannot probe " & Proxy_File);
+                     return;
+                  end if;
+
+                  if Has_Video and Has_Audio then
+                     Media := Timeline.Both;
+                  elsif Has_Video then
+                     Media := Timeline.Video;
+                  elsif Has_Audio then
+                     Media := Timeline.Audio;
+                  else
+                     Set
+                       (R,
+                        False,
+                        "err proxy has no supported media tracks");
+                     return;
+                  end if;
+
+                  Add_Source
+                    (S.Seq,
+                     C.Src_Name,
+                     C.File,
+                     Length,
+                     Media,
+                     Ok);
+               end;
+            else
+               Add_Source
+                 (S.Seq,
+                  C.Src_Name,
+                  C.File,
+                  C.Length,
+                  To_TL (C.Src_Kind),
+                  Ok);
             end if;
-            Add_Source (S.Seq, C.Src_Name, C.File, C.Length, To_TL (C.Src_Kind), Ok);
+
             if not Ok then
-               Set (R, False, "err source exists or table full"); return;
+               Set
+                 (R,
+                  False,
+                  "err source exists or table full");
+               return;
             end if;
          when Commands.Track =>
             Add_Track (S.Seq, C.Trk_Name, To_TL (C.Trk_Kind), Ok);
@@ -165,7 +226,7 @@ package body Framewise.Session is
          Status : Integer;
          Found  : Boolean;
       begin
-         Run_Shell (Text (1 .. Last), Status, Found);
+         Shell.Run (Text (1 .. Last), Status, Found);
          if not Found then
             Set (R, False, "err no shell to run ffmpeg; use 'plan' and run it yourself");
          elsif Status = 0 then
@@ -176,31 +237,14 @@ package body Framewise.Session is
       end;
    end Do_Plan;
 
-   --  Run one line through sh -c so quoting survives. Found = False when
-   --  there is no shell on the PATH.
-   procedure Run_Shell (Cmd : String; Status : out Integer; Found : out Boolean) is
-      use GNAT.OS_Lib;
-      Args : Argument_List_Access :=
-        new Argument_List'(new String'("-c"), new String'(Cmd));
-      Sh   : String_Access := Locate_Exec_On_Path ("sh");
-   begin
-      Status := -1;
-      Found := Sh /= null;
-      if Found then
-         Status := Spawn (Sh.all, Args.all);
-         Free (Sh);
-      end if;
-      Free (Args);
-   end Run_Shell;
-
    --  The proxy is the file the editor actually reads: intra-only video
    --  (every frame a keyframe) and PCM audio, both decodable in pure Ada
    --  by Framewise.Decode. The original is only touched by export.
    function Proxy_Command (Source : String) return String is
-     ("ffmpeg -y -hide_banner -loglevel error -i " & Source
+     ("ffmpeg -y -hide_banner -loglevel error -i " & Shell.Quote_Path (Source)
       & " -vf scale=-2:540 -c:v mjpeg -q:v 3 -pix_fmt yuvj420p"
       & " -c:a pcm_s16le -ar 48000 -movflags +faststart "
-      & Source & ".proxy.mov");
+      & Shell.Quote_Path (Source & ".proxy.mov"));
 
    procedure Do_Proxy (S : Session; N : Name; R : out Response) is
       Sr     : constant Source_Id := Find_Source (S.Seq, N);
@@ -214,7 +258,7 @@ package body Framewise.Session is
       declare
          File : constant String := Image (S.Seq.Sources (Sr).File);
       begin
-         Run_Shell (Proxy_Command (File), Status, Found);
+         Shell.Run (Proxy_Command (File), Status, Found);
          if not Found then
             Set (R, False, "err no shell to run ffmpeg: " & Proxy_Command (File));
          elsif Status = 0 then
@@ -319,6 +363,266 @@ package body Framewise.Session is
          when Comment | Empty => Set (R, True, "ok");
       end case;
    end Execute;
+
+   protected body Export_Completion is
+      procedure Finish (Success : Boolean) is
+      begin
+         Ok := Success;
+      end Finish;
+
+      function Succeeded return Boolean is (Ok);
+   end Export_Completion;
+
+   task body Export_Waiter is
+      use type GNAT.OS_Lib.Process_Id;
+      Expected, PID : GNAT.OS_Lib.Process_Id;
+      Success : Boolean;
+   begin
+      accept Await (PID : GNAT.OS_Lib.Process_Id) do
+         Expected := PID;
+      end Await;
+      --  Only wait here. Process creation remains on the caller thread and
+      --  all UI updates remain on the UI thread. Windows GNAT supports this
+      --  blocking wait, but its Non_Blocking_Wait_Process always returns no PID.
+      loop
+         GNAT.OS_Lib.Wait_Process (PID, Success);
+         exit when PID = Expected or else PID = GNAT.OS_Lib.Invalid_Pid;
+      end loop;
+      Result.Finish (PID = Expected and then Success);
+   exception
+      when others => Result.Finish (False);
+   end Export_Waiter;
+
+   procedure Free_Waiter is new Ada.Unchecked_Deallocation
+     (Export_Waiter, Export_Waiter_Access);
+   procedure Free_Completion is new Ada.Unchecked_Deallocation
+     (Export_Completion, Export_Completion_Access);
+
+   function Export_Running (Job : Export_Job) return Boolean is
+      use type GNAT.OS_Lib.Process_Id;
+   begin
+      return Job.PID /= GNAT.OS_Lib.Invalid_Pid;
+   end Export_Running;
+
+   function Export_Percent (Job : Export_Job) return Natural is (Job.Percent);
+
+   procedure Delete_Export_File (File : in out GNAT.OS_Lib.String_Access) is
+      use GNAT.OS_Lib;
+      Removed : Boolean;
+   begin
+      if File /= null then
+         Delete_File (File.all, Removed);
+         Free (File);
+      end if;
+   end Delete_Export_File;
+
+   procedure Read_Export_Progress (Job : in out Export_Job) is
+      package IO renames Ada.Streams.Stream_IO;
+      use type GNAT.OS_Lib.String_Access;
+      use type IO.Count;
+      use type Ada.Streams.Stream_Element_Offset;
+      F : IO.File_Type;
+      Buffer : Ada.Streams.Stream_Element_Array (1 .. 16_384);
+      Last : Ada.Streams.Stream_Element_Offset;
+      Available : IO.Count;
+      Prefix : constant String := "out_time_us=";
+   begin
+      if Job.Progress_File = null or else Job.Total_Time = 0 then
+         return;
+      end if;
+      IO.Open (F, IO.In_File, Job.Progress_File.all);
+      if IO.Size (F) < IO.Count (Job.Progress_Offset) then
+         Job.Progress_Offset := 0;
+         Job.Progress_Length := 0;
+         Job.Progress_Overflow := False;
+      end if;
+      Available := IO.Size (F) - IO.Count (Job.Progress_Offset);
+      if Available > 0 then
+         IO.Set_Index (F, IO.Positive_Count (Job.Progress_Offset + 1));
+         --  Bound work per UI tick and retain incomplete records between reads.
+         IO.Read (F, Buffer (1 .. Ada.Streams.Stream_Element_Offset'Min
+           (Buffer'Last, Ada.Streams.Stream_Element_Offset (Available))), Last);
+         for I in 1 .. Last loop
+            declare
+               C : constant Character := Character'Val (Buffer (I));
+            begin
+               if C = ASCII.LF then
+                  if not Job.Progress_Overflow and then Job.Progress_Length > Prefix'Length and then
+                    Job.Progress_Line (1 .. Prefix'Length) = Prefix
+                  then
+                     begin
+                        declare
+                           US : constant Long_Long_Integer := Long_Long_Integer'Value
+                             (Job.Progress_Line (Prefix'Length + 1 .. Job.Progress_Length));
+                           Value : constant Long_Float :=
+                             Long_Float (US) / (Seconds (Job.Total_Time) * 1_000_000.0) * 100.0;
+                        begin
+                           if US >= 0 then
+                              Job.Percent := Natural'Max (Job.Percent,
+                                Natural (Long_Float'Floor (Long_Float'Min (99.0, Value))));
+                           end if;
+                        end;
+                     exception
+                        when Constraint_Error => null; --  N/A or a malformed record.
+                     end;
+                  end if;
+                  Job.Progress_Length := 0;
+                  Job.Progress_Overflow := False;
+               elsif C /= ASCII.CR then
+                  if Job.Progress_Length < Job.Progress_Line'Length then
+                     Job.Progress_Length := Job.Progress_Length + 1;
+                     Job.Progress_Line (Job.Progress_Length) := C;
+                  else
+                     Job.Progress_Overflow := True;
+                  end if;
+               end if;
+            end;
+         end loop;
+         Job.Progress_Offset := Job.Progress_Offset + Long_Long_Integer (Last);
+      end if;
+      IO.Close (F);
+   exception
+      --  FFmpeg may still be opening/flushing the progress file. Retry later.
+      when IO.Name_Error | IO.Use_Error | IO.End_Error | IO.Device_Error =>
+         if IO.Is_Open (F) then
+            IO.Close (F);
+         end if;
+   end Read_Export_Progress;
+
+   function Export_Output (Line : String) return String is
+      C : Command;
+      Ok : Boolean;
+      Err : Error_String;
+      Last : Natural;
+   begin
+      if Line'Length > Max_Line then
+         return "";
+      end if;
+      Parse (Line, C, Ok, Err, Last);
+      return (if Ok and then C.K = Export then Image (C.Out_File) else "");
+   end Export_Output;
+
+   procedure Start_Export
+     (S : Session; Output : String; Job : in out Export_Job; R : out Response;
+      Wait_In_Background : Boolean := False)
+   is
+      use GNAT.OS_Lib;
+      Text : String (1 .. Plan.Max_Plan);
+      Last : Natural;
+      Ok : Boolean;
+      FD, Progress_FD : File_Descriptor;
+   begin
+      if Export_Running (Job) then
+         Set (R, False, "err an export is already running");
+         return;
+      end if;
+      Job.Percent := 0;
+      Job.Total_Time := Plan.Output_Duration (S.Seq);
+      Job.Progress_Offset := 0;
+      Job.Progress_Length := 0;
+      Job.Progress_Overflow := False;
+      if Output'Length not in 1 .. Max_Path then
+         Set (R, False, "err invalid output path");
+         return;
+      end if;
+      Plan.Generate (S.Seq, S.Cfg, Output, Text, Last, Ok);
+      if not Ok then
+         Set (R, False, "err nothing to render or export plan too long");
+         return;
+      end if;
+      Create_Temp_File (FD, Job.Log_File);
+      if FD = Invalid_FD then
+         Free (Job.Log_File);
+         Set (R, False, "err cannot create export diagnostics file");
+         return;
+      end if;
+      Create_Temp_File (Progress_FD, Job.Progress_File);
+      if Progress_FD = Invalid_FD then
+         Close (FD);
+         Delete_Export_File (Job.Log_File);
+         Free (Job.Progress_File);
+         Set (R, False, "err cannot create export progress file");
+         return;
+      end if;
+      Close (Progress_FD);
+      Plan.Generate (S.Seq, S.Cfg, Output, Text, Last, Ok, Job.Progress_File.all);
+      if not Ok then
+         Close (FD);
+         Delete_Export_File (Job.Log_File);
+         Delete_Export_File (Job.Progress_File);
+         Set (R, False, "err export plan too long");
+         return;
+      end if;
+      Job.PID := Shell.Start (Text (1 .. Last), FD);
+      Close (FD);
+      if not Export_Running (Job) then
+         Delete_Export_File (Job.Log_File);
+         Delete_Export_File (Job.Progress_File);
+         Set (R, False, "err cannot start native shell for FFmpeg");
+         return;
+      end if;
+      if Wait_In_Background or else Shell.Is_Windows then
+         Job.Completion := new Export_Completion;
+         Job.Waiter := new Export_Waiter (Job.Completion);
+         Job.Waiter.Await (Job.PID);
+      end if;
+      Job.Output := To_Path (Output);
+      Set (R, True, "ok exporting " & Output);
+   end Start_Export;
+
+   procedure Poll_Export (Job : in out Export_Job; R : out Response; Done : out Boolean) is
+      use GNAT.OS_Lib;
+      PID : Process_Id;
+      Success : Boolean;
+      F : Ada.Text_IO.File_Type;
+   begin
+      Done := False;
+      Set (R, True, "ok waiting for export");
+      if not Export_Running (Job) then
+         return;
+      end if;
+      Read_Export_Progress (Job);
+      if Job.Waiter /= null then
+         --  Read only after task termination, then release both objects. A
+         --  completed export can be followed by another export in the same job.
+         if not Job.Waiter.all'Terminated then
+            return;
+         end if;
+         Success := Job.Completion.Succeeded;
+         PID := Job.PID;
+         Free_Waiter (Job.Waiter);
+         Free_Completion (Job.Completion);
+      else
+         Non_Blocking_Wait_Process (PID, Success);
+      end if;
+      if PID /= Job.PID then
+         return;
+      end if;
+      Job.PID := Invalid_Pid;
+      if Success then
+         Job.Percent := 100;
+      end if;
+      Done := True;
+      Set (R, Success, (if Success then "ok exported " else "err FFmpeg export failed: ") &
+        Image (Job.Output));
+      if not Success then
+         begin
+            Ada.Text_IO.Open (F, Ada.Text_IO.In_File, Job.Log_File.all);
+            while not Ada.Text_IO.End_Of_File (F) loop
+               Append (R, ASCII.LF & Ada.Text_IO.Get_Line (F));
+            end loop;
+            Ada.Text_IO.Close (F);
+         exception
+            when Ada.Text_IO.Name_Error | Ada.Text_IO.Use_Error =>
+               if Ada.Text_IO.Is_Open (F) then
+                  Ada.Text_IO.Close (F);
+               end if;
+               Append (R, ASCII.LF & "Cannot read FFmpeg diagnostics.");
+         end;
+      end if;
+      Delete_Export_File (Job.Log_File);
+      Delete_Export_File (Job.Progress_File);
+   end Poll_Export;
 
    function Sequence_Of (S : Session) return Timeline.Sequence is (S.Seq);
    function Settings_Of (S : Session) return Plan.Settings is (S.Cfg);

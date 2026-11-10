@@ -164,6 +164,11 @@ package body Framewise.ISOBMFF.Boxes with SPARK_Mode is
          --  Read_Box promises Box_Last >= Position, so this always moves
          --  forward. A hostile file cannot make this loop run forever.
          Position := Child.Box_Last + 1;
+
+         --  Position started at First and only moves forward, so it is
+         --  never before First. The prover needs this to prove the
+         --  postcondition Child.Box_First >= First.
+         pragma Loop_Invariant (Position >= First);
          pragma Loop_Variant (Increases => Position);
       end loop;
 
