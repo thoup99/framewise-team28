@@ -8,25 +8,60 @@ package body Framewise.Commands with SPARK_Mode => Off is
    end record;
    type Token_Array is array (1 .. Max_Tokens) of Bounds;
 
-   procedure Tokenize (Line : String; T : out Token_Array; N : out Natural);
+   procedure Tokenize (Line : String; T : out Token_Array; N : out Natural; Valid : out Boolean);
    function Lower (S : String) return String;
    function Kind_Img (K : Media_Kind) return String;
 
-   procedure Tokenize (Line : String; T : out Token_Array; N : out Natural) is
+   procedure Tokenize
+     (Line : String; T : out Token_Array; N : out Natural; Valid : out Boolean)
+   is
       I : Natural := Line'First;
+      function Whitespace (C : Character) return Boolean is
+        (C in ' ' | ASCII.HT | ASCII.CR);
    begin
       N := 0;
+      Valid := True;
       T := [others => <>];
       while I <= Line'Last loop
-         while I <= Line'Last and then Line (I) = ' ' loop
+         while I <= Line'Last and then Whitespace (Line (I)) loop
             I := I + 1;
          end loop;
-         exit when I > Line'Last or else N = Max_Tokens;
+         exit when I > Line'Last;
+         if N = Max_Tokens then
+            Valid := False;
+            return;
+         end if;
          N := N + 1;
          T (N).First := I;
-         while I <= Line'Last and then Line (I) /= ' ' loop
+         if N = 1 and then Line (I) = '#' then
+            T (N).Last := Line'Last;
+            return;
+         end if;
+         if Line (I) = '"' then
+            --  Quotes group a path into one token. Backslashes stay literal:
+            --  they are directory separators in Windows project documents.
             I := I + 1;
-         end loop;
+            while I <= Line'Last and then Line (I) /= '"' loop
+               I := I + 1;
+            end loop;
+            if I > Line'Last then
+               Valid := False;
+               return;
+            end if;
+            I := I + 1;
+            if I <= Line'Last and then not Whitespace (Line (I)) then
+               Valid := False;
+               return;
+            end if;
+         else
+            while I <= Line'Last and then not Whitespace (Line (I)) loop
+               if Line (I) = '"' then
+                  Valid := False;
+                  return;
+               end if;
+               I := I + 1;
+            end loop;
+         end if;
          T (N).Last := I - 1;
       end loop;
    end Tokenize;
@@ -149,23 +184,27 @@ package body Framewise.Commands with SPARK_Mode => Off is
       end Need;
 
       procedure Get_Name (Tok_I, Into : Positive) is
-         S : constant String := Tok (Tok_I);
       begin
+         --  Validate the token before Tok slices the original input line.
          if not G or else Tok_I > N then
             G := False;
             return;
          end if;
-         if S'Length > Max_Name then
-            G := False;
-            return;
-         end if;
-         for Ch of S loop
-            if not (Ch in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_') then
+         declare
+            S : constant String := Tok (Tok_I);
+         begin
+            if S'Length > Max_Name then
                G := False;
                return;
             end if;
-         end loop;
-         Names (Into) := To_Name (S);
+            for Ch of S loop
+               if not (Ch in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_') then
+                  G := False;
+                  return;
+               end if;
+            end loop;
+            Names (Into) := To_Name (S);
+         end;
       end Get_Name;
 
       procedure Get_Time (Tok_I, Into : Positive) is
@@ -217,13 +256,28 @@ package body Framewise.Commands with SPARK_Mode => Off is
       end Get_Int;
 
       procedure Get_Path (Tok_I : Positive) is
-         S : constant String := Tok (Tok_I);
       begin
-         if not G or else Tok_I > N or else S'Length > Max_Path then
+         if not G or else Tok_I > N then
             G := False;
             return;
          end if;
-         Pth := To_Path (S);
+         declare
+            S : constant String := Tok (Tok_I);
+         begin
+            declare
+               File : constant String :=
+                 (if S'Length >= 2 and then S (S'First) = '"'
+                  then S (S'First + 1 .. S'Last - 1) else S);
+            begin
+               if File'Length not in 1 .. Max_Path or else
+                 (for some C of File => C in '"' | ASCII.CR | ASCII.LF)
+               then
+                  G := False;
+                  return;
+               end if;
+               Pth := To_Path (File);
+            end;
+         end;
       end Get_Path;
 
       procedure Fail (Msg : String) is
@@ -241,7 +295,11 @@ package body Framewise.Commands with SPARK_Mode => Off is
       Error := [others => ' '];
       Last := 0;
       C := (K => Empty);
-      Tokenize (Line, T, N);
+      Tokenize (Line, T, N, G);
+      if not G then
+         Fail ("err malformed quotes or too many arguments");
+         return;
+      end if;
       if N = 0 then
          return;
       end if;
@@ -378,7 +436,7 @@ package body Framewise.Commands with SPARK_Mode => Off is
    begin
       case C.K is
          when Import =>
-            return "import " & Image (C.Src_Name) & " " & Image (C.File) & " "
+            return "import " & Image (C.Src_Name) & " " & Quote_Path (Image (C.File)) & " "
               & Image_Time (C.Length) & " " & Kind_Img (C.Src_Kind);
          when Track =>
             return "track " & Image (C.Trk_Name) & " " & Kind_Img (C.Trk_Kind);
@@ -402,17 +460,17 @@ package body Framewise.Commands with SPARK_Mode => Off is
          when Info =>
             return "info " & Image (C.Target);
          when Plan =>
-            return "plan " & Image (C.Out_File);
+            return "plan " & Quote_Path (Image (C.Out_File));
          when Export =>
-            return "export " & Image (C.Out_File);
+            return "export " & Quote_Path (Image (C.Out_File));
          when Proxy =>
             return "proxy " & Image (C.Target);
          when Undo =>
             return "undo";
          when Save =>
-            return "save " & Image (C.Out_File);
+            return "save " & Quote_Path (Image (C.Out_File));
          when Load =>
-            return "load " & Image (C.Out_File);
+            return "load " & Quote_Path (Image (C.Out_File));
          when Comment =>
             return "#";
          when Empty =>

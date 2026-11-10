@@ -7,6 +7,7 @@ with FFmpeg.Version;
 with Framewise;           use Framewise;
 with Framewise.Commands;  use Framewise.Commands;
 with Framewise.Session;
+with Framewise.Shell;
 with Framewise.Timeline;  use Framewise.Timeline;
 with Interfaces.C;
 
@@ -143,6 +144,7 @@ procedure Tests is
       Err  : Error_String;
       Last : Natural;
       procedure Round_Trip (L : String);
+      procedure Reject_Incomplete (L : String);
       procedure Round_Trip (L : String) is
       begin
          Parse (L, C, Ok, Err, Last);
@@ -150,8 +152,27 @@ procedure Tests is
          Parse (Image (C), D, Ok, Err, Last);
          Check ("round trip: " & Image (C), Ok and then Image (D) = Image (C));
       end Round_Trip;
+
+      procedure Reject_Incomplete (L : String) is
+      begin
+         Parse (L, C, Ok, Err, Last);
+         Check ("missing arguments: " & L, not Ok and then Last > 0 and then C.K = Empty);
+      end Reject_Incomplete;
    begin
       Round_Trip ("import a a.mp4 30 video");
+      Round_Trip ("import a ""C:\media files\take 1.mp4"" 30 video");
+      Round_Trip ("import a ""C:\media files\"" 30 video");
+      Round_Trip ("save ""my projects/project 1.fw""");
+      Round_Trip ("load ""my projects/project 1.fw""");
+      Round_Trip ("plan ""output files/render 1.mp4""");
+      Round_Trip ("export ""output files/render 1.mp4""");
+      Parse ("import a ""C:\media files\take 1.mp4"" 30 video", C, Ok, Err, Last);
+      Check ("quoted path preserves Windows separators and spaces",
+             Ok and then Framewise.Image (C.File) = "C:\media files\take 1.mp4");
+      Reject_Incomplete ("import a ""unterminated.mp4 30 video");
+      Reject_Incomplete ("import a ""file.mp4""suffix 30 video");
+      Reject_Incomplete ("import a """" 30 video");
+      Reject_Incomplete ("import a a.mp4 30 video extra extra extra extra");
       Round_Trip ("track v1 video");
       Round_Trip ("place c1 v1 a 2 8.5 0");
       Round_Trip ("move c1 12.25");
@@ -160,6 +181,29 @@ procedure Tests is
       Round_Trip ("delete c2");
       Round_Trip ("settings 1280 720 30");
       Round_Trip ("proxy a");
+      Round_Trip ("plan out.mp4");
+      Round_Trip ("export out.mp4");
+      Round_Trip ("save project.fw");
+      Round_Trip ("load project.fw");
+
+      --  Missing name/path tokens must be rejected before slicing the input.
+      Reject_Incomplete ("plan");
+      Reject_Incomplete ("export");
+      Reject_Incomplete ("save");
+      Reject_Incomplete ("load");
+      Reject_Incomplete ("import");
+      Reject_Incomplete ("import source");
+      Reject_Incomplete ("track");
+      Reject_Incomplete ("place");
+      Reject_Incomplete ("place clip track");
+      Reject_Incomplete ("move");
+      Reject_Incomplete ("trim");
+      Reject_Incomplete ("split");
+      Reject_Incomplete ("split clip 5");
+      Reject_Incomplete ("delete");
+      Reject_Incomplete ("info");
+      Reject_Incomplete ("proxy");
+      Reject_Incomplete ("settings");
       Parse ("import a a.mp4", C, Ok, Err, Last);
       Check
          ("import without length",
@@ -182,6 +226,17 @@ procedure Tests is
         (for some I in 1 .. R.Length - Sub'Length + 1 =>
            R.Text (I .. I + Sub'Length - 1) = Sub);
    begin
+      Check ("Windows uses cmd even when sh is installed",
+             Framewise.Shell.Executable (Windows => True) = "cmd.exe");
+      Check ("POSIX uses sh", Framewise.Shell.Executable (Windows => False) = "sh");
+      Check ("Windows paths keep backslashes inside quotes",
+             Framewise.Shell.Quote_Path ("C:\media\clip.mp4", Windows => True) =
+               '"' & "C:\media\clip.mp4" & '"');
+      Check ("POSIX paths keep backslashes inside single quotes",
+             Framewise.Shell.Quote_Path ("back\slash.mp4", Windows => False) =
+               "'back\slash.mp4'");
+      Check ("POSIX apostrophe is escaped outside the quoted span",
+             Framewise.Shell.Quote_Path ("take'1.mp4", Windows => False) = "'take'\''1.mp4'");
       Execute (S, "import a a.mp4 30", R);
       Execute (S, "track v1", R);
       Execute (S, "place c1 v1 a 0 10 0", R);
@@ -190,16 +245,18 @@ procedure Tests is
       Check ("overlap not recorded", not R.Ok and History_Length (S) = 3);
       Execute (S, "info c1", R);
       Check ("info clip", R.Ok and Has (R, "length 10"));
+      Execute (S, "plan", R);
+      Check ("incomplete plan preserves project", not R.Ok and History_Length (S) = 3);
       Execute (S, "plan out.mp4", R);
       Check ("plan is an ffmpeg line",
-             R.Ok and Has (R, "-i a.mp4") and Has (R, "[vout]"));
+             R.Ok and Has (R, "-i " & Framewise.Shell.Quote_Path ("a.mp4")) and Has (R, "[vout]"));
       Execute (S, "undo", R);
       Check ("undo", R.Ok and History_Length (S) = 2);
       Execute (S, "plan out.mp4", R);
       Check ("plan with no clips fails", not R.Ok);
       Execute (S, "list", R);
       Check ("list", R.Ok and Has (R, "v1()"));
-      Check ("history line", History_Line (S, 1) = "import a a.mp4 30 both");
+      Check ("history line", History_Line (S, 1) = "import a ""a.mp4"" 30 both");
       Execute (S, "proxy zz", R);
       Check ("proxy unknown source", not R.Ok and History_Length (S) = 2);
    end Test_Session;
