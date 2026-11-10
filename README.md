@@ -257,3 +257,29 @@ including `jpeg_entropy_tests` on a JPEG copied from a real MJPEG MOV.
 The normal `gnatprove -P framewise.gpr --mode=flow --checks-as-errors=on`
 completed successfully (219 checks). The two new JPEG child packages alone
 passed 18 flow checks; existing warnings in timeline/Bedrock remain.
+
+### Week 4 A: timeline proof and box reader proof
+
+**P1 done.** `Framewise.Timeline` proves with zero unproved checks
+(Clear, Add_Source, Add_Track, Find, Delete, Place, Move, Trim, Split):
+
+```sh
+alr exec -- gnatprove -P framewise.gpr --mode=all -u framewise-timeline.adb
+```
+
+This reports "all checks proved" at the default level and timeout
+(GNATprove 16.1.0). CI runs the same proof at `--level=2` with
+`--checks-as-errors=on`, so a broken proof turns CI red.
+
+**P3 started.** The box reader (`Framewise.ISOBMFF.Boxes`: `Read_Box`,
+`Read_U32`, `Read_U16`, `Find_Child`) also proves with zero unproved
+checks at the default level:
+
+```sh
+alr exec -- gnatprove -P framewise.gpr --mode=all -u framewise-isobmff-boxes.adb
+```
+
+The only change needed was a loop invariant in `Find_Child`
+(`Position >= First`), so the prover can show every child it returns
+starts inside the range it was given. Next: the table readers, then
+the resolution loop.
