@@ -37,6 +37,9 @@ package body Framewise.JPEG.MCU with SPARK_Mode is
       Pixels         : out RGBA_Block)
    is
    begin
+      --  Initialize the entire output array for SPARK flow analysis.
+      Pixels := [others => 0];
+
       for Y in 0 .. 15 loop
          for X in 0 .. 15 loop
             declare
