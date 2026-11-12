@@ -33,6 +33,8 @@ jobs:
           ./bin/jpeg_header_tests
           ./bin/jpeg_entropy_tests
           ./bin/parse_tests
+          ./bin/jpeg_idct_tests
+          ./bin/jpeg_mcu_tests
       - name: CLI runs the example and round-trips the document
         run: |
           cd cli
