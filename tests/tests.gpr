@@ -9,7 +9,7 @@ project Tests is
    for Main use ("tests.adb", "box_reader_tests.adb", "table_reader_tests.adb",
                  "p1_foundation_tests.adb", "jpeg_header_tests.adb",
                  "jpeg_entropy_tests.adb", "parse_tests.adb", "export_job_tests.adb",
-                 "jpeg_idct_tests.adb", "jpeg_mcu_tests.adb");
+                 "jpeg_idct_tests.adb", "jpeg_mcu_tests.adb", "jpeg_compare.adb");
 
    package Compiler is
       for Default_Switches ("Ada") use

@@ -13,6 +13,11 @@ package Framewise.JPEG.Bits with SPARK_Mode is
    --  Value is zero on failure, including partially read requests.
    --  Start again on a new slice after handling a restart marker.
 
+   procedure Finish_Interval
+     (Data : Byte_Array; State : in out Reader;
+      Expected : Byte; Ok : out Boolean);
+   --  Discard byte padding and consume exactly the expected restart or EOI.
+
    function Failed (State : Reader) return Boolean;
    function Marker (State : Reader) return Byte;
    --  Marker returns the terminating marker code, or zero for exhaustion.

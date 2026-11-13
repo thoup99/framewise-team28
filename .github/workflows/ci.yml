@@ -35,6 +35,12 @@ jobs:
           ./bin/parse_tests
           ./bin/jpeg_idct_tests
           ./bin/jpeg_mcu_tests
+      - name: JPEG pixels and truncated scans
+        run: |
+          sudo apt-get install -y libjpeg-dev python3-venv
+          python3 -m venv /tmp/jpeg-reference
+          /tmp/jpeg-reference/bin/pip install 'Pillow>=10.2'
+          /tmp/jpeg-reference/bin/python tests/compare_jpeg.py
       - name: CLI runs the example and round-trips the document
         run: |
           cd cli
