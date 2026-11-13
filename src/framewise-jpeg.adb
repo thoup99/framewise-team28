@@ -115,12 +115,7 @@ package body Framewise.JPEG with SPARK_Mode is
       type Selector_Array is array (Positive range 1 .. 3) of Tables.Table_ID;
       Quant, DC, AC : Selector_Array := [others => 0];
       type Predictor_Array is array (Positive range 1 .. 3) of Integer;
-      Predictors : Predictor_Array := [others => 0];
       type Sample_Array is array (Positive range 1 .. 6) of IDCT.Sample_Block;
-      Samples : Sample_Array := [others => [others => 0]];
-      Coefficients : Blocks.Coefficient_Array;
-      Tile : MCU.RGBA_Block;
-      State : Bits.Reader;
       Actual : Header;
       Good : Boolean;
       Have_Frame : Boolean := False;
@@ -128,14 +123,21 @@ package body Framewise.JPEG with SPARK_Mode is
       Size, Last, Scan_First : Natural;
       Code : Byte;
       Restart_Interval : Natural := 0;
-      Restart_Number : Natural := 0;
-      MCU_Count : Natural := 0;
       Columns : constant Positive := (H.Width + 15) / 16;
       Rows : constant Positive := (H.Height + 15) / 16;
-      Component : Positive;
 
       procedure Read_Image (Success : out Boolean);
       procedure Read_Image (Success : out Boolean) is
+         Predictors : Predictor_Array := [others => 0];
+         Samples : Sample_Array := [others => [others => 0]];
+         Coefficients : Blocks.Coefficient_Array;
+         Tile : MCU.RGBA_Block;
+         State : Bits.Reader;
+         Restart_Number : Natural := 0;
+         MCU_Count : Natural := 0;
+         Component : Positive;
+         Good : Boolean;
+         Cursor : Natural := Scan_First;
       begin
          Success := False;
          Bits.Start (State);
@@ -144,7 +146,7 @@ package body Framewise.JPEG with SPARK_Mode is
                for B in 1 .. 6 loop
                   Component := (if B <= 4 then 1 else B - 3);
                   Blocks.Decode_Block
-                    (Data (Scan_First .. Data'Last), State,
+                    (Data (Cursor .. Data'Last), State,
                      HT (Tables.DC, DC (Component)), HT (Tables.AC, AC (Component)),
                      Predictors (Component), Coefficients, Good);
                   if not Good then
@@ -174,12 +176,12 @@ package body Framewise.JPEG with SPARK_Mode is
                  and then MCU_Count < Rows * Columns
                then
                   Bits.Finish_Interval
-                    (Data (Scan_First .. Data'Last), State,
+                    (Data (Cursor .. Data'Last), State,
                      Byte (16#D0# + Restart_Number), Good);
                   if not Good then
                      return;
                   end if;
-                  Scan_First := Scan_First + Bits.Consumed (State);
+                  Cursor := Cursor + Bits.Consumed (State);
                   Restart_Number := (Restart_Number + 1) mod 8;
                   Predictors := [others => 0];
                   Bits.Start (State);
@@ -187,7 +189,7 @@ package body Framewise.JPEG with SPARK_Mode is
             end loop;
          end loop;
          Bits.Finish_Interval
-           (Data (Scan_First .. Data'Last), State, 16#D9#, Success);
+           (Data (Cursor .. Data'Last), State, 16#D9#, Success);
       end Read_Image;
    begin
       Pixels := [others => 0];
