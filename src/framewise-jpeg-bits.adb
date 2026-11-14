@@ -65,4 +65,33 @@ package body Framewise.JPEG.Bits with SPARK_Mode is
       Value := Result;
       Ok := True;
    end Read_Bits;
+   procedure Finish_Interval
+     (Data : Byte_Array; State : in out Reader;
+      Expected : Byte; Ok : out Boolean)
+   is
+      B : Byte;
+   begin
+      Ok := False;
+      if State.Error or else
+        State.Current mod 2 ** State.Remaining /= 2 ** State.Remaining - 1
+      then
+         return;
+      end if;
+      if State.Offset >= Data'Length
+        or else Data (Data'First + State.Offset) /= 16#FF#
+      then
+         return;
+      end if;
+      loop
+         State.Offset := State.Offset + 1;
+         if State.Offset >= Data'Length then
+            return;
+         end if;
+         B := Data (Data'First + State.Offset);
+         exit when B /= 16#FF#;
+      end loop;
+      State.Offset := State.Offset + 1;
+      State.Remaining := 0;
+      Ok := B = Expected;
+   end Finish_Interval;
 end Framewise.JPEG.Bits;
