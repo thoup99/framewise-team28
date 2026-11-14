@@ -17,7 +17,7 @@ package body Editor_Export is
    use type Inputs.Text_Input_Handle;
    use type Adi.Widget.Text_Editor.Text_Editor_Handle;
    use type Timeline_View.Views.Handle;
-   Job : FS.Export_Job;
+   Job : aliased FS.Export_Job;
    Dialog : Dialogs.Dialog_Handle;
    Output : Adi.Widget.Text_Editor.Text_Editor_Handle;
    Progress_Track, Progress_Fill : Boxes.Box_Handle;
@@ -71,7 +71,7 @@ package body Editor_Export is
       Log_Line := US.To_Unbounded_String
         ((if Command'Length > 0 then Command else "export " & FS.Quote_Path (Path)));
       Log_Origin := Origin;
-      FS.Start_Export (Editor, Path, Job, Reply);
+      FS.Execute (Editor, US.To_String (Log_Line), Reply, Job => Job'Access);
       Displayed := -1;
       Show_Progress;
       Set_State (+Dialogs.Get_Button_Handle (Dialog, 1), State_Disabled, Is_Busy);

@@ -36,19 +36,20 @@ package Framewise.Session is
    function Export_Running (Job : Export_Job) return Boolean;
    function Export_Percent (Job : Export_Job) return Natural;
    --  Monotonic within a job; 100 is reserved for successful process completion.
-   procedure Start_Export
-     (S : Session; Output : String; Job : in out Export_Job; R : out Response;
-      Wait_In_Background : Boolean := False);
    procedure Poll_Export (Job : in out Export_Job; R : out Response; Done : out Boolean);
    --  The plan is captured at launch. Poll never changes the document and
    --  returns FFmpeg diagnostics when the child finishes. One active job per editor.
-   --  Windows uses a background blocking wait: GNAT's nonblocking wait is not
-   --  supported there. True forces that fallback on other runtimes as well;
-   --  Windows always uses it, regardless of this option.
    function Export_Output (Line : String) return String;
    --  Recognize a valid console export without duplicating command parsing in UI.
 
-   procedure Execute (S : in out Session; Line : String; R : out Response);
+   procedure Execute
+     (S : in out Session; Line : String; R : out Response;
+      Job : access Export_Job := null; Wait_In_Background : Boolean := False);
+   --  All front-end actions enter through this command parser. With Job,
+   --  export launches asynchronously; without it, export waits as in the CLI.
+   --  Wait_In_Background forces the Windows-compatible background waiter on
+   --  other runtimes for async jobs. Windows always uses that waiter.
+   --  Poll_Export only reads progress/completion and never starts an action.
 
    ---------------------------------------------------------------------
    --  Read-back for front ends
@@ -99,6 +100,11 @@ private
       Completion : Export_Completion_Access := null;
       Waiter : Export_Waiter_Access := null;
    end record;
+
+   --  Export launch is internal: front ends submit an export line to Execute.
+   procedure Start_Export
+     (S : Session; Output : String; Job : in out Export_Job; R : out Response;
+      Wait_In_Background : Boolean := False);
 
    type History_Array is array (1 .. Max_History) of Command;
 
