@@ -1,5 +1,5 @@
 --  Baseline JPEG decoder (ITU T.81, sequential DCT, Huffman, 8-bit).
---  Pure Ada, SPARK. PLACEHOLDER in the seed: Decode reports Ok = False.
+--  Pure Ada, SPARK. Baseline interleaved 4:2:0 scans.
 --
 --  Why our own: the proxy is Motion JPEG, one baseline JPEG per frame,
 --  because it is the simplest intra-only codec that every tool on
@@ -67,5 +67,7 @@ package Framewise.JPEG with SPARK_Mode is
                   and then Pixels'Length >= H.Width * H.Height * 4,
           Post => (if not Ok then Pixels'Length >= 0);
    --  RGBA, row-major, top-down, straight alpha 255.
+   --  H must match the encoded header. Supports restart intervals.
+   --  Malformed/truncated input returns Ok = False with zeroed output.
 
 end Framewise.JPEG;
