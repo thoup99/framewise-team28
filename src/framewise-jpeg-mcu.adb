@@ -15,17 +15,17 @@ package body Framewise.JPEG.MCU with SPARK_Mode is
       end if;
    end Clamp;
 
-   --  Round a signed fixed-point value divided by 256.
-   function Round_256 (Value : Integer) return Integer;
+   --  Round a signed fixed-point value divided by 65536.
+   function Round_65536 (Value : Integer) return Integer;
 
-   function Round_256 (Value : Integer) return Integer is
+   function Round_65536 (Value : Integer) return Integer is
    begin
       if Value >= 0 then
-         return (Value + 128) / 256;
+         return (Value + 32_768) / 65_536;
       else
-         return -((-Value + 128) / 256);
+         return -((-Value + 32_767) / 65_536);
       end if;
-   end Round_256;
+   end Round_65536;
 
    procedure Compose_420
      (Y_Top_Left     : Framewise.JPEG.IDCT.Sample_Block;
@@ -74,17 +74,19 @@ package body Framewise.JPEG.MCU with SPARK_Mode is
                P : constant Natural := (Y * 16 + X) * 4;
             begin
                --  Convert YCbCr to RGB using fixed-point
-               --  coefficients scaled by 256.
+               --  coefficients scaled by 65536.
+               --  Extra fractional bits avoid colour errors near rounding
+               --  boundaries. Products and sums stay within +/- 16 million.
                Pixels (P) :=
-                 Clamp (Luma + Round_256 (359 * Cr_Diff));
+                 Clamp (Luma + Round_65536 (91_881 * Cr_Diff));
 
                Pixels (P + 1) :=
                  Clamp
-                   (Luma -
-                    Round_256 (88 * Cb_Diff + 183 * Cr_Diff));
+                   (Luma +
+                    Round_65536 (-22_554 * Cb_Diff - 46_802 * Cr_Diff));
 
                Pixels (P + 2) :=
-                 Clamp (Luma + Round_256 (454 * Cb_Diff));
+                 Clamp (Luma + Round_65536 (116_130 * Cb_Diff));
 
                --  The output is always fully opaque.
                Pixels (P + 3) := 255;

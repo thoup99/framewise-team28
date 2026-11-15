@@ -16,7 +16,9 @@ int main(int argc, char **argv)
     jpeg_stdio_src(&decoder, input);
     jpeg_read_header(&decoder, TRUE);
     decoder.do_fancy_upsampling = FALSE;
-    decoder.dct_method = JDCT_ISLOW;
+    /* Compare the mathematical IDCT, not ISLOW's intermediate integer
+       rounding. Keep chroma reconstruction identical in both decoders. */
+    decoder.dct_method = JDCT_FLOAT;
     decoder.out_color_space = JCS_RGB;
     jpeg_start_decompress(&decoder);
     JSAMPARRAY row = (*decoder.mem->alloc_sarray)

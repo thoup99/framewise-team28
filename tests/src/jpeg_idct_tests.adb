@@ -62,6 +62,17 @@ begin
    Check (Pixels (0) > Pixels (7),
           "Expected horizontal pixel variation");
 
+   --  The most extreme supported coefficients and quantizers must remain
+   --  bounded through both high-precision passes, including clipping.
+   Quantization := [others => 255];
+   Coefficients := [others => -2048];
+   IDCT.Decode (Coefficients, Quantization, Pixels, Ok);
+   Check (Ok, "Minimum coefficients overflowed");
+   Coefficients := [others => 2047];
+   IDCT.Decode (Coefficients, Quantization, Pixels, Ok);
+   Check (Ok, "Maximum coefficients overflowed");
+   Quantization := [others => 1];
+
    --  Quantization values must not be zero.
    Quantization (0) := 0;
    IDCT.Decode (Coefficients, Quantization, Pixels, Ok);

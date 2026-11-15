@@ -116,6 +116,34 @@ begin
    Check (Sample_At (0, 0, 2) = 128, "Cr changed the blue channel");
    Check (Sample_At (0, 0, 3) = 255, "Alpha was not preserved");
 
+   --  Check every chroma pair against the independent real-valued colour
+   --  equations at mid-luma. Include both signs and both clipping limits.
+   for Blue in 0 .. 255 loop
+      for Red in 0 .. 255 loop
+         Cb := [others => Framewise.JPEG.Byte (Blue)];
+         Cr := [others => Framewise.JPEG.Byte (Red)];
+         Compose;
+         declare
+            B : constant Long_Float := Long_Float (Blue - 128);
+            R : constant Long_Float := Long_Float (Red - 128);
+            type Channels is array (Natural range 0 .. 2) of Long_Float;
+            Expected : constant Channels :=
+              [128.0 + 1.402 * R,
+               128.0 - 0.344136 * B - 0.714136 * R,
+               128.0 + 1.772 * B];
+         begin
+            for Channel in Expected'Range loop
+               Check
+                 (abs (Integer (Sample_At (0, 0, Channel)) -
+                   Integer (Long_Float'Max
+                     (0.0, Long_Float'Min (255.0, Expected (Channel))))) <= 1,
+                  "Colour differs from real-valued reference");
+            end loop;
+            Check (Sample_At (0, 0, 3) = 255, "Colour conversion lost alpha");
+         end;
+      end loop;
+   end loop;
+
    Ada.Text_IO.Put_Line ("PASS: JPEG MCU assembly tests");
 
 end JPEG_MCU_Tests;
