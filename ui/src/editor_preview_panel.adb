@@ -20,6 +20,15 @@ package body Editor_Preview_Panel is
         ((Flex_Grow => Set (1.0), Height => Set (Size (Px (0.0))), Min_Height => Set (Size (Px (40.0))),
           Padding => Set (CSS_Box (Px (24.0))),
           Background_Color => Set_Bg (RGB (0, 0, 0)), others => <>)).Build);
+      
+      Set_Part_Style
+        (+Preview,
+         Icon_Part,
+         Style.Base
+           ((Width       => Set (Size (Px (Float (Preview_Width)))),
+             Height      => Set (Size (Px (Float (Preview_Height)))),
+             Flex_Shrink => Set (0.0),
+             others      => <>)).Build);
 
       Set_Part_Style (+Playback_Row, Main_Part, Style.Base
         ((Row_Style with delta Justify_Content => Set (Justify_Content_Value'(Center)),
