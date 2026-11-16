@@ -10,7 +10,7 @@ with Framewise.Session;
 procedure Export_Job_Tests is
    package FS renames Framewise.Session;
    S : FS.Session;
-   Job : FS.Export_Job;
+   Job : aliased FS.Export_Job;
    R : FS.Response;
    Done : Boolean;
 
@@ -64,19 +64,28 @@ begin
          Target : constant String := Prefix & (if Background then "_waiter.mp4" else "_native.mp4");
          History : constant Natural := FS.History_Length (S);
       begin
-         FS.Start_Export (S, Target, Job, R, Wait_In_Background => Background);
+         FS.Execute (S, "export", R, Job => Job'Access);
+         pragma Assert (not R.Ok and then not FS.Export_Running (Job),
+                        "Malformed export must fail in the command parser");
+         FS.Execute (S, "export " & FS.Quote_Path (Target), R,
+                     Job => Job'Access, Wait_In_Background => Background);
          pragma Assert (R.Ok and then FS.Export_Running (Job), FS.Image (R));
+         FS.Execute (S, "export " & FS.Quote_Path (Prefix & "_duplicate.mp4"), R,
+                     Job => Job'Access);
+         pragma Assert (not R.Ok and then FS.Export_Running (Job),
+                        "A second export must leave the active job running");
          Await_Result;
          pragma Assert (R.Ok and then Ada.Directories.Exists (Target), FS.Image (R));
-         FS.Start_Export (S, Prefix & "_missing/out.mp4", Job, R,
-                          Wait_In_Background => Background);
+         FS.Execute (S, "export " & FS.Quote_Path (Prefix & "_missing/out.mp4"), R,
+                     Job => Job'Access, Wait_In_Background => Background);
          pragma Assert (R.Ok);
          Await_Result;
          pragma Assert (not R.Ok, "FFmpeg failure must be reported");
          pragma Assert ((for some C of FS.Image (R) => C = ASCII.LF),
                         "Failure must include captured FFmpeg diagnostics");
          --  A subsequent successful export proves the waiter was reclaimed.
-         FS.Start_Export (S, Target, Job, R, Wait_In_Background => Background);
+         FS.Execute (S, "export " & FS.Quote_Path (Target), R,
+                     Job => Job'Access, Wait_In_Background => Background);
          pragma Assert (R.Ok);
          Await_Result;
          pragma Assert (R.Ok and then FS.History_Length (S) = History, FS.Image (R));

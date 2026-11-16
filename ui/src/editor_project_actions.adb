@@ -154,10 +154,9 @@ package body Editor_Project_Actions is
       Pending := Nothing;
       case Action is
          when New_Project =>
-            --  Clear the session internally; report one New Project action
-            --  rather than logging an undo for every discarded edit.
+            --  Reset through the same visible commands available in the CLI.
             while FS.History_Length (Editor) > 0 loop
-               FS.Execute (Editor, "undo", Reply);
+               Execute_Line ("undo");
                exit when not Reply.Ok;
             end loop;
             Project_Path := US.Null_Unbounded_String;
@@ -165,8 +164,6 @@ package body Editor_Project_Actions is
             Editor_Timeline_Actions.Reset_View;
             Refresh_Timeline;
             Tell ("New project. Import files and add a track to begin.");
-            Editor_Console.Record_Command
-              ("New Project", "ok new project", Editor_Console.Editor_Action);
          when Open_Project =>
             Adi.OS.Show_Open_File_Dialog (Open_Selected'Access, W,
               Filters => [(US.To_Unbounded_String ("Framewise projects"), US.To_Unbounded_String ("fw"))]);

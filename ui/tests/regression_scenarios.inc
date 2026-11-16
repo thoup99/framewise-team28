@@ -411,6 +411,13 @@
          Check (not Reply.Ok, "Failed export must report failure");
          Check (Editor_Export.Progress_Percent < 100, "Failed export never shows completion");
          Check_Editor_Log ("export " & FS.Quote_Path (Test_Dir & "/missing/export.mp4"));
+         Editor_Export.Start (Test_Dir & "/invalid command.mp4", Command => "export");
+         Check (not Reply.Ok and then not Editor_Export.Is_Busy,
+                "Export must execute and validate the submitted command line");
+         Check (not Ada.Directories.Exists (Test_Dir & "/invalid command.mp4"),
+                "Malformed export must not launch FFmpeg");
+         Check_Editor_Log ("export");
+         Editor_Export.Close;
          Export_Selected (Adi.OS.Empty_Strings);
          Check (History = Initial_History, "Export/failure/cancel must not edit project");
 
@@ -455,9 +462,18 @@
          Execute_Line ("track Gui_Only audio");
          Save_Project;
          Check (not Dirty, "Save after Save As uses new current document");
-         Request_Action (New_Project);
-         Check (FS.History_Length (Editor) = 0 and then US.Length (Project_Path) = 0, "New clears project");
-         Check_Editor_Log ("New Project");
+         declare
+            Undos_Before : constant Natural := Ada.Strings.Fixed.Count
+              (Adi.Widget.Text_Editor.Get_Text (Console_Output),
+               "[Editor] undo" & Ada.Characters.Latin_1.LF);
+            Discarded : constant Natural := FS.History_Length (Editor);
+         begin
+            Request_Action (New_Project);
+            Check (FS.History_Length (Editor) = 0 and then US.Length (Project_Path) = 0,
+                   "New clears project");
+            Check_Editor_Log ("undo", Undos_Before + Discarded);
+            Check_Editor_Log ("New Project", 0);
+         end;
          Open_Selected (Files (Test_Dir & "/first.fw"));
          Check (Reply.Ok and then FS.Sequence_Of (Editor).Tracks (2).Used, "Save persisted later edit");
          Check (not FS.Sequence_Of (Editor).Tracks (3).Used, "Save As must preserve original document");

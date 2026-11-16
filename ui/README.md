@@ -283,8 +283,11 @@ behavior behind that boundary so the GUI and CLI use the same validation rules.
 
 Ordinary edits go through `Editor_Controller.Execute_Line`. Console submissions
 use the same execution boundary with a console origin and project bookkeeping.
-New Project clears the session internally and records one action. Cursor navigation
-updates the view without adding undo history or a console command.
+New Project submits and records an `undo` line for each discarded edit. Export
+buttons and console exports submit their `export` line to `Session.Execute` with
+an asynchronous job; only progress and completion are polled afterward. The CLI
+uses the same parser and export command, waiting for completion by default.
+Cursor navigation updates the view without adding undo history or a console command.
 
 Run the existing GUI interaction and editor workflow regressions after changing
 these modules; they cover focus, gestures, menus, logging, export and document

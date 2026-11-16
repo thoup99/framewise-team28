@@ -319,7 +319,10 @@ package body Framewise.Session is
    -- Execute --
    -------------
 
-   procedure Execute (S : in out Session; Line : String; R : out Response) is
+   procedure Execute
+     (S : in out Session; Line : String; R : out Response;
+      Job : access Export_Job := null; Wait_In_Background : Boolean := False)
+   is
       C    : Command;
       Ok   : Boolean;
       Err  : Error_String;
@@ -356,7 +359,12 @@ package body Framewise.Session is
          when List => Do_List (S, R);
          when Info   => Do_Info (S, C.Target, R);
          when Commands.Plan => Do_Plan (S, Image (C.Out_File), R, Run => False);
-         when Export => Do_Plan (S, Image (C.Out_File), R, Run => True);
+         when Export =>
+            if Job = null then
+               Do_Plan (S, Image (C.Out_File), R, Run => True);
+            else
+               Start_Export (S, Image (C.Out_File), Job.all, R, Wait_In_Background);
+            end if;
          when Proxy  => Do_Proxy (S, C.Target, R);
          when Save   => Do_Save (S, Image (C.Out_File), R);
          when Load   => Do_Load (S, Image (C.Out_File), R);
