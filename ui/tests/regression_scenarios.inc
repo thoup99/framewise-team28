@@ -339,6 +339,30 @@
          Inputs.Set_Text (Values (3), "0");
          Apply;
          Check (Reply.Ok, "Place selected media");
+         Stage ("scrub motion coalesces preview work and release renders exactly");
+         declare
+            Before_History : constant US.Unbounded_String := History;
+            V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+         begin
+            Labels.Set_Text (Preview, "pending scrub");
+            V.Scrubbing := True;
+            for I in 1 .. 30 loop
+               Timeline_View.Set_Playhead (V.Ptr.all, Framewise.Time (I * 90));
+            end loop;
+            Check (Labels.Get_Text (Preview) = "pending scrub",
+                   "Mouse motion must not decode synchronously");
+            Check (Inputs.Get_Text (Cursor_Time_Input) = FS.Image_Time (V.Playhead),
+                   "Cursor input follows every motion without waiting for decoding");
+            delay 0.09;
+            Editor_Timeline_Actions.Poll_Preview (W);
+            Check (Labels.Get_Text (Preview) = "", "Frame tick renders the newest pending position");
+            Labels.Set_Text (Preview, "pending release");
+            V.Scrubbing := False;
+            Timeline_View.Set_Playhead (V.Ptr.all, Framewise.Timebase / 2);
+            Check (Labels.Get_Text (Preview) = "", "Mouse release renders the exact final frame");
+            Check (History = Before_History, "Scrubbing must not change edit history");
+         end;
+
          Check_Editor_Log ("place " & US.To_String (Clip_Name) & " Main_Video " &
            Combos.Get_Selected_Text (Source_Choice) & " 0 2 0");
          declare

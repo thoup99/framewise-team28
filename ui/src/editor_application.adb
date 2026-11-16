@@ -12,6 +12,7 @@ with Editor_Layout;
 with Editor_Preferences;
 with Editor_Cursors;
 with Editor_Controller;
+with Editor_Timeline_Actions;
 
 package body Editor_Application is
    use type Timeline_View.Views.Handle;
@@ -63,6 +64,7 @@ package body Editor_Application is
       Set_Focus (W, +Tracks);
       Editor_Cursors.Connect;
       Connect_Frame (W, Editor_Preferences.Capture'Access);
+      Connect_Frame (W, Editor_Timeline_Actions.Poll_Preview'Access);
    end Initialize;
 
    procedure Shutdown is
@@ -73,6 +75,7 @@ package body Editor_Application is
          Editor_Preferences.Capture (W);
       end if;
       Editor_Preferences.Save;
+      Editor_Timeline_Actions.Release_Preview;
       Editor_Cursors.Release;
       Menus.Destroy (Clip_Menu);
       Menus.Destroy (File_Menu);

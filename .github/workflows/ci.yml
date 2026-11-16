@@ -68,6 +68,7 @@ jobs:
           python3 ../scripts/jpeg_reference.py /tmp/framewise-ref.jpg /tmp/framewise-ref.rgba
           ../tests/bin/jpeg_header_tests /tmp/framewise-ref.jpg
           ../tests/bin/jpeg_entropy_tests /tmp/framewise-ref.jpg
+          ../tests/bin/frame_at_tests take1.mp4.proxy.mov
       - name: Proxy samples match ffprobe
         run: |
           cd examples

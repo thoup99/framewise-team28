@@ -1,6 +1,5 @@
 with Ada.Unchecked_Deallocation;
 with Framewise.ISOBMFF.Boxes;
-with Framewise.JPEG;
 
 package body Framewise.Decode is
 
@@ -8,6 +7,9 @@ package body Framewise.Decode is
    use type Framewise.ISOBMFF.Sample_Index;
    use type Ada.Streams.Stream_IO.Count;
    use type Ada.Streams.Stream_Element_Offset;
+
+   procedure Free is new Ada.Unchecked_Deallocation
+     (Framewise.JPEG.Byte_Array, JPEG_Buffer_Access);
 
    procedure Probe
      (File                    : String;
@@ -206,6 +208,9 @@ package body Framewise.Decode is
          end;
       end if;
 
+      Free (H.Cached_Pixels);
+      H.Cached_Index := 0;
+      H.Cached_Header := (others => <>);
       H.Opened := False;
       H.Map := (others => <>);
    end Close;
@@ -214,11 +219,6 @@ package body Framewise.Decode is
    (H : in out Handle; T : Time; Width, Height : Positive;
    Pixels : out RGBA_Buffer; Ok : out Boolean)
    is
-      type JPEG_Buffer_Access is access Framewise.JPEG.Byte_Array;
-
-      procedure Free is new Ada.Unchecked_Deallocation
-         (Framewise.JPEG.Byte_Array, JPEG_Buffer_Access);
-
       Index       : ISOBMFF.Sample_Index;
       Data        : JPEG_Buffer_Access := null;
       Decoded     : JPEG_Buffer_Access := null;
@@ -241,71 +241,81 @@ package body Framewise.Decode is
          return;
       end if;
 
-      declare
-         S : ISOBMFF.Sample renames H.Map.Video.Samples (Index);
-      begin
-         if S.Size = 0 then
-            return;
-         end if;
-
-         Data :=
-            new Framewise.JPEG.Byte_Array
-               (1 .. S.Size);
-
+      if H.Cached_Index /= Index or else H.Cached_Pixels = null then
          declare
-            Raw : Ada.Streams.Stream_Element_Array
-               (1 .. Ada.Streams.Stream_Element_Offset (S.Size));
-
-            Last : Ada.Streams.Stream_Element_Offset;
+            S : ISOBMFF.Sample renames H.Map.Video.Samples (Index);
          begin
-         --  ISOBMFF offsets are zero-based. Stream_IO indices are
-         --  one-based, so add one when seeking into the file.
-            Ada.Streams.Stream_IO.Set_Index
-               (H.File,
-               Ada.Streams.Stream_IO.Positive_Count
-                  (S.Offset + 1));
-
-            Ada.Streams.Stream_IO.Read
-               (H.File, Raw, Last);
-
-            if Last /= Raw'Last then
-               Free (Data);
+            if S.Size = 0 then
                return;
             end if;
 
-            for I in 1 .. S.Size loop
-               Data (I) :=
-                  Framewise.JPEG.Byte
-                     (Raw
-                        (Ada.Streams.Stream_Element_Offset (I)));
-            end loop;
+            Data :=
+               new Framewise.JPEG.Byte_Array
+                  (1 .. S.Size);
+
+            declare
+               Raw : Ada.Streams.Stream_Element_Array
+                  (1 .. Ada.Streams.Stream_Element_Offset (S.Size));
+
+               Last : Ada.Streams.Stream_Element_Offset;
+            begin
+            --  ISOBMFF offsets are zero-based. Stream_IO indices are
+            --  one-based, so add one when seeking into the file.
+               Ada.Streams.Stream_IO.Set_Index
+                  (H.File,
+                  Ada.Streams.Stream_IO.Positive_Count
+                     (S.Offset + 1));
+
+               Ada.Streams.Stream_IO.Read
+                  (H.File, Raw, Last);
+
+               if Last /= Raw'Last then
+                  Free (Data);
+                  return;
+               end if;
+
+               for I in 1 .. S.Size loop
+                  Data (I) :=
+                     Framewise.JPEG.Byte
+                        (Raw
+                           (Ada.Streams.Stream_Element_Offset (I)));
+               end loop;
+            end;
          end;
-      end;
 
-      Framewise.JPEG.Read_Header
-         (Data.all, Header, Header_Ok);
+         Framewise.JPEG.Read_Header
+            (Data.all, Header, Header_Ok);
 
-      if not Header_Ok then
+         if not Header_Ok then
+            Free (Data);
+            return;
+         end if;
+
+         Decoded :=
+            new Framewise.JPEG.Byte_Array
+               (1 .. Header.Width * Header.Height * 4);
+
+         Framewise.JPEG.Decode
+            (Data.all,
+            Header,
+            Decoded.all,
+            Decode_Ok);
+
          Free (Data);
-         return;
+
+         if not Decode_Ok then
+            Free (Decoded);
+            return;
+         end if;
+
+         --  Publish the new cache only after a complete successful decode.
+         Free (H.Cached_Pixels);
+         H.Cached_Pixels := Decoded;
+         Decoded := null;
+         H.Cached_Header := Header;
+         H.Cached_Index := Index;
       end if;
-
-      Decoded :=
-         new Framewise.JPEG.Byte_Array
-            (1 .. Header.Width * Header.Height * 4);
-
-      Framewise.JPEG.Decode
-         (Data.all,
-         Header,
-         Decoded.all,
-         Decode_Ok);
-
-      Free (Data);
-
-      if not Decode_Ok then
-         Free (Decoded);
-         return;
-      end if;
+      Header := H.Cached_Header;
 
       --  Nearest-neighbour scaling from the proxy frame to the requested
       --  preview dimensions.
@@ -331,8 +341,8 @@ package body Framewise.Decode is
                         Target_Base +
                         Channel) :=
                         ISOBMFF.Byte
-                           (Decoded
-                              (Decoded'First +
+                           (H.Cached_Pixels
+                              (H.Cached_Pixels'First +
                               Source_Base +
                               Channel));
                   end loop;
