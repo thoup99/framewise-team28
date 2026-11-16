@@ -14,6 +14,7 @@ REPO = UI.parent
 def generate(destination):
     destination.mkdir(parents=True, exist_ok=True)
     source = """with Adi.Core; use Adi.Core;
+with Adi.Image;
 with Adi.CSS_Styles; use Adi.CSS_Styles;
 with Adi.Widget; use Adi.Widget;
 with Adi.Widget_Styles; use Adi.Widget_Styles;

@@ -52,6 +52,31 @@
             Form_Result (Null_Handle, 1, "Apply");
          end Apply;
 
+         procedure Assert_Preview_Fills is
+            use type Adi.Image.Image_Handle;
+            Bounds : constant Rectangle := Get_Geometry (+Preview);
+            Found : Boolean := False;
+         begin
+            for I in 1 .. Item_Count (+Preview) loop
+               declare
+                  Drawn : constant Item := Get_Item (+Preview, I);
+               begin
+                  if Drawn.Kind = Image_Item and then
+                    Drawn.Image_Source /= Adi.Image.Null_Image_Handle
+                  then
+                     Found := True;
+                     Check (abs (Drawn.Geometry.Width - Bounds.Width) <= 1.0 and then
+                            abs (Drawn.Geometry.Height - Bounds.Height) <= 1.0,
+                            "Preview canvas must fill the entire black panel");
+                     Check (abs (Drawn.Geometry.X - Bounds.X) <= 1.0 and then
+                            abs (Drawn.Geometry.Y - Bounds.Y) <= 1.0,
+                            "Preview canvas must be centered in the panel");
+                  end if;
+               end;
+            end loop;
+            Check (Found, "Preview must contain a decoded image");
+         end Assert_Preview_Fills;
+
          procedure Assert_Centered is
             L : constant Rectangle := Get_Geometry (+Start_Button);
             R : constant Rectangle := Get_Geometry (+End_Button);
@@ -361,6 +386,38 @@
             Timeline_View.Set_Playhead (V.Ptr.all, Framewise.Timebase / 2);
             Check (Labels.Get_Text (Preview) = "", "Mouse release renders the exact final frame");
             Check (History = Before_History, "Scrubbing must not change edit history");
+         end;
+
+         Stage ("preview canvas follows both resizable panel dimensions");
+         Render (W);
+         delay 0.09;
+         Editor_Timeline_Actions.Poll_Preview (W);
+         Render (W);
+         Assert_Preview_Fills;
+         declare
+            Horizontal : Editor_Split.Views.Ref := Editor_Split.Views.Borrow (Workspace);
+            Vertical : Editor_Split.Views.Ref := Editor_Split.Views.Borrow (Main_Split);
+            Old_Horizontal : constant Float := Horizontal.Fraction;
+            Old_Vertical : constant Float := Vertical.Fraction;
+         begin
+            Horizontal.Fraction := 0.6;
+            Vertical.Fraction := 0.3;
+            Mark_Dirty (+Workspace);
+            Mark_Dirty (+Main_Split);
+            Render (W);
+            delay 0.09;
+            Editor_Timeline_Actions.Poll_Preview (W);
+            Render (W);
+            Assert_Preview_Fills;
+            Horizontal.Fraction := Old_Horizontal;
+            Vertical.Fraction := Old_Vertical;
+            Mark_Dirty (+Workspace);
+            Mark_Dirty (+Main_Split);
+            Render (W);
+            delay 0.09;
+            Editor_Timeline_Actions.Poll_Preview (W);
+            Render (W);
+            Assert_Preview_Fills;
          end;
 
          Check_Editor_Log ("place " & US.To_String (Clip_Name) & " Main_Video " &

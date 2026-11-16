@@ -217,7 +217,7 @@ package body Framewise.Decode is
 
    procedure Frame_At
    (H : in out Handle; T : Time; Width, Height : Positive;
-   Pixels : out RGBA_Buffer; Ok : out Boolean)
+   Pixels : out RGBA_Buffer; Ok : out Boolean; Preserve_Aspect : Boolean := False)
    is
       Index       : ISOBMFF.Sample_Index;
       Data        : JPEG_Buffer_Access := null;
@@ -225,6 +225,9 @@ package body Framewise.Decode is
       Header      : Framewise.JPEG.Header;
       Header_Ok   : Boolean;
       Decode_Ok   : Boolean;
+      Draw_Width  : Positive := Width;
+      Draw_Height : Positive := Height;
+      Left, Top   : Natural := 0;
    begin
       Pixels := [others => 0];
       Ok := False;
@@ -317,23 +320,47 @@ package body Framewise.Decode is
       end if;
       Header := H.Cached_Header;
 
-      --  Nearest-neighbour scaling from the proxy frame to the requested
-      --  preview dimensions.
-      for Y in 0 .. Height - 1 loop
+      if Preserve_Aspect then
+         --  Cross products use 64 bits so large output sizes cannot overflow.
+         if Long_Long_Integer (Width) * Long_Long_Integer (Header.Height) <=
+           Long_Long_Integer (Height) * Long_Long_Integer (Header.Width)
+         then
+            Draw_Height := Positive
+              (Long_Long_Integer'Max (1,
+               Long_Long_Integer (Width) * Long_Long_Integer (Header.Height) /
+               Long_Long_Integer (Header.Width)));
+         else
+            Draw_Width := Positive
+              (Long_Long_Integer'Max (1,
+               Long_Long_Integer (Height) * Long_Long_Integer (Header.Width) /
+               Long_Long_Integer (Header.Height)));
+         end if;
+         Left := (Width - Draw_Width) / 2;
+         Top := (Height - Draw_Height) / 2;
+      end if;
+
+      --  Fill the canvas with opaque black, including any letterbox bars.
+      for I in 0 .. Width * Height - 1 loop
+         Pixels (Pixels'First + I * 4 + 3) := 255;
+      end loop;
+
+      --  Nearest-neighbour scaling from the cached native frame into the
+      --  centered destination rectangle. Failed requests still return zeros.
+      for Y in 0 .. Draw_Height - 1 loop
          declare
             Source_Y : constant Natural :=
-               Y * Header.Height / Height;
+               Y * Header.Height / Draw_Height;
          begin
-            for X in 0 .. Width - 1 loop
+            for X in 0 .. Draw_Width - 1 loop
                declare
                   Source_X : constant Natural :=
-                     X * Header.Width / Width;
+                     X * Header.Width / Draw_Width;
 
                   Source_Base : constant Natural :=
                      (Source_Y * Header.Width + Source_X) * 4;
 
                   Target_Base : constant Natural :=
-                     (Y * Width + X) * 4;
+                     ((Y + Top) * Width + X + Left) * 4;
                begin
                   for Channel in 0 .. 3 loop
                      Pixels

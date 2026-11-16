@@ -112,6 +112,7 @@ package body Editor_Timeline_Actions is
 
    Preview_Decoder : Framewise.Decode.Handle;
    Active_Proxy : US.Unbounded_String;
+   Rendered_Width, Rendered_Height : Natural := 0;
    Pending_Preview : Boolean := False;
    Pending_Text : US.Unbounded_String;
    Last_Preview : Ada.Real_Time.Time := Ada.Real_Time.Clock;
@@ -144,7 +145,20 @@ package body Editor_Timeline_Actions is
 
    procedure Poll_Preview (Win : Window_Handle) is
       pragma Unreferenced (Win);
+      Area : constant Rectangle := Get_Geometry (+Preview);
+      Width : constant Positive := Positive (Integer'Max (1, Integer (Pixel_Type'Floor (Area.Width))));
+      Height : constant Positive := Positive (Integer'Max (1, Integer (Pixel_Type'Floor (Area.Height))));
    begin
+      --  Panel/window resizing changes the canvas even if the playhead is still.
+      if Width /= Rendered_Width or else Height /= Rendered_Height then
+         declare
+            V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+         begin
+            Pending_Text := US.To_Unbounded_String
+              (Timeline_View.Preview_Text (Read_Sequence, V.Playhead));
+            Pending_Preview := True;
+         end;
+      end if;
       if Pending_Preview and then
         Ada.Real_Time.Clock >= Last_Preview + Ada.Real_Time.Milliseconds (80)
       then
@@ -171,8 +185,15 @@ package body Editor_Timeline_Actions is
       Seq : constant FS.Sequence_View := Read_Sequence;
       V   : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
 
+      Area : constant Rectangle := Get_Geometry (+Preview);
+      Preview_Width : constant Positive :=
+        Positive (Integer'Max (1, Integer (Pixel_Type'Floor (Area.Width))));
+      Preview_Height : constant Positive :=
+        Positive (Integer'Max (1, Integer (Pixel_Type'Floor (Area.Height))));
       Found : Boolean := False;
    begin
+      Rendered_Width := Preview_Width;
+      Rendered_Height := Preview_Height;
       if Get_Focus_Handle (W) /= Widget_Handle'(+Cursor_Time_Input) then
          Inputs.Set_Text
            (Cursor_Time_Input,
@@ -238,7 +259,8 @@ package body Editor_Timeline_Actions is
                            Width  => Preview_Width,
                            Height => Preview_Height,
                            Pixels => Pixels.all,
-                           Ok     => Good);
+                           Ok     => Good,
+                           Preserve_Aspect => True);
 
 
                         if not Good then
