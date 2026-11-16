@@ -277,26 +277,37 @@
                    "Canceled file pickers do not create phantom command entries");
          end;
 
-         Stage ("import callback, filters and canceled import");
+         Stage ("automatic GUI import detects duration without a form");
+         Initial_History := History;
+         Import_Selected (Files (Test_Dir & "/missing.mp4"));
+         Check (not Reply.Ok and then History = Initial_History,
+                "Failed automatic import must not register a source");
+         Check (not Dialogs.Is_Shown (Form), "Automatic import does not request duration");
+         Check (not Ada.Directories.Exists (Test_Dir & "/missing.mp4.proxy.mov"),
+                "Failed import must not leave a usable proxy");
          Import_Selected (Files (Test_Dir & "/video clip.mp4"));
-         Check (Dialogs.Is_Shown (Form), "Import should request duration");
-         Inputs.Set_Text (Values (2), "invalid");
-         Apply;
-         Check (not Reply.Ok and then Dialogs.Is_Shown (Form),
-                "Failed import must keep its error visible");
-         Check (not Ada.Directories.Exists (Test_Dir & "/video clip.mp4.proxy.mov"),
-                "Failed import must not generate a proxy");
-         Inputs.Set_Text (Values (2), "3");
-         Apply;
          Check (Reply.Ok, "Video import should succeed");
-         Check_Editor_Log ("proxy " & US.To_String (Form_Target));
+         Check (not Dialogs.Is_Shown (Form), "Successful import requires no duration dialog");
          Check (Ada.Directories.Exists (Test_Dir & "/video clip.mp4.proxy.mov"),
                 "GUI import must generate the preview proxy automatically");
-         Check_Editor_Log ("import " & US.To_String (Form_Target) & " " & FS.Quote_Path (Test_Dir & "/video clip.mp4") & " 3 video");
-         Execute_Line ("import music " & Test_Dir & "/audio.wav 3 audio");
+         Check_Editor_Log ("import " & US.To_String (Form_Target) & " " &
+           FS.Quote_Path (Test_Dir & "/video clip.mp4"));
+         Check (FS.Sequence_Of (Editor).Sources (1).Length = 3 * Framewise.Timebase,
+                "GUI import detects the actual three-second duration");
+         Check (FS.Sequence_Of (Editor).Sources (1).Kind'Image = "VIDEO",
+                "GUI import detects the media kind");
+         Check (FS.History_Line (Editor, 1) = "import " & US.To_String (Form_Target) & " " &
+           FS.Quote_Path (Test_Dir & "/video clip.mp4") & " 3 video",
+                "Saved import history must contain resolved duration and kind");
+         Execute_Line ("import music " & FS.Quote_Path (Test_Dir & "/audio.wav"));
          Check (Reply.Ok, "Audio registration");
-         Execute_Line ("import combined " & Test_Dir & "/both.mp4 3 both");
+         Check (FS.Sequence_Of (Editor).Sources (2).Length = 3 * Framewise.Timebase and then
+                FS.Sequence_Of (Editor).Sources (2).Kind'Image = "AUDIO",
+                "Audio duration and kind are detected automatically");
+         Execute_Line ("import combined " & FS.Quote_Path (Test_Dir & "/both.mp4"));
          Check (Reply.Ok, "Combined media registration");
+         Check (FS.Sequence_Of (Editor).Sources (3).Kind'Image = "BOTH",
+                "Combined media kind is detected automatically");
          Initial_History := History;
          Check (Combos.Option_Count (Source_Choice) = 3, "All filter source count");
          Clicked (+Filter_Buttons (Video_Media));

@@ -21,8 +21,9 @@
 --    load     FILE.fw
 --    # comment
 --
---  import LENGTH is required in the seed because Decode.Probe is a
---  placeholder. When probe lands, LENGTH becomes optional.
+--  Without LENGTH, import creates a missing proxy and detects duration/kind.
+--  Resolved metadata is recorded so project replay needs no proxy. Explicit
+--  LENGTH remains accepted for existing scripts and offline project loading.
 --
 --  proxy writes FILE.proxy.mov next to the source: Motion JPEG at 540p
 --  plus 16-bit PCM. That is the file Framewise.Decode reads. The

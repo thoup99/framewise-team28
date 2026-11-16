@@ -98,10 +98,13 @@ use the existing Framewise syntax and validation; they are optional.
 
 1. Use **File > Open Project** to open an existing `.fw` document, or
    **New Project** to start empty.
-2. Choose **Import Files** and select a media file. Enter its duration in
-   seconds and choose `video`, `audio`, or `both`. Duration is still manual
-   at this stage of the semester plan. Imported files appear in Project
-   Files and the Select media dropdown in the timeline.
+2. Choose **Import Files** and select a media file. The session creates a
+   missing proxy and detects duration and media type automatically; no duration
+   dialog is needed. Imported files appear in Project Files and the Select
+   media dropdown. Failed imports are reported in the status and console.
+   Resolved duration and type are saved in project history, so reopening or
+   undoing does not require the proxy. Existing explicit-duration scripts
+   remain supported.
 3. Use **Add Track** to enter a track name and choose video, audio or combined
    media. Names use up to 32 letters, numbers or underscores; a generated
    name is supplied as a starting point. Choose it
@@ -177,9 +180,9 @@ alr exec -- gprbuild -P ui_checks.gpr
 
 Manual regression:
 
-- Start empty; import media with an explicit duration, add a compatible
-  track, and place the media. Verify invalid duration and overlapping
-  placement display an error and leave the dialog open for correction.
+- Start empty; import media without entering a duration, add a compatible
+  track, and place the media. Verify missing media reports an error without
+  registering a source, and overlapping placement remains correctable.
 - Move with both mouse and numeric dialog; trim with clip edges; split, delete and undo.
 - Scrub a video gap and a clip; verify clip/time text changes, without
   adding an edit or marking the project dirty.
