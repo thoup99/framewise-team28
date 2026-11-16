@@ -25,15 +25,43 @@ package body Framewise.ISOBMFF.Tables with SPARK_Mode is
       and then Box.Payload_Size >= Header_Bytes
       and then Count <= (Box.Payload_Size - Header_Bytes) / Entry_Bytes);
 
+   --  The shape Read_Box and Find_Child promise for a box they return:
+   --  the payload is the end of the box, right after the header. The
+   --  prover only knows this about a Box_Header parameter if we say so.
+   function Well_Shaped (Box : Box_Header) return Boolean is
+     (Box.Header_Length in 8 | 16
+      and then Box.Box_First >= 1
+      and then Box.Box_First <= Box.Box_Last
+      and then Box.Payload_Size =
+        Box.Box_Last - Box.Box_First + 1 - Box.Header_Length
+      and then (if Box.Payload_Size > 0 then
+                  Box.Payload_First = Box.Box_First + Box.Header_Length));
+
+   --  Well_Shaped, and every byte of the box is in Data, so Data can be
+   --  indexed anywhere from Box_First to Box_Last.
+   function Inside (Data : Byte_Array; Box : Box_Header) return Boolean is
+     (Well_Shaped (Box)
+      and then Box.Box_First >= Data'First
+      and then Box.Box_Last <= Data'Last);
+
    --  Where entry I of a table starts in the file. Only call it for an I
    --  inside a table that passed Fits, so the sum stays inside the box.
+   --  The Post says the whole entry ends inside the box, which is what
+   --  lets callers add 4 or 8 to the result without overflow.
    function Entry_Position
      (Box          : Box_Header;
       Header_Bytes : Positive;
       Entry_Bytes  : Positive;
       I            : Sample_Index) return Positive
    is
-     (Box.Payload_First + Header_Bytes + Natural (I - 1) * Entry_Bytes);
+     (Box.Payload_First + Header_Bytes + Natural (I - 1) * Entry_Bytes)
+     with Pre =>
+       Well_Shaped (Box)
+       and then I >= 1
+       and then Box.Payload_Size >= Header_Bytes
+       and then Natural (I) <= (Box.Payload_Size - Header_Bytes) / Entry_Bytes,
+     Post =>
+       Entry_Position'Result <= Box.Box_Last - Entry_Bytes + 1;
 
    procedure Clear (T : in out Raw_Track);
 
@@ -42,7 +70,9 @@ package body Framewise.ISOBMFF.Tables with SPARK_Mode is
       Parent : Box_Header;
       Kind   : Box_Kind;
       Child  : out Box_Header;
-      Found  : out Boolean);
+      Found  : out Boolean)
+     with Pre  => Inside (Data, Parent),
+          Post => (if Found then Inside (Data, Child));
 
    procedure Read_Table_Start
      (Data        : Byte_Array;
@@ -94,14 +124,22 @@ package body Framewise.ISOBMFF.Tables with SPARK_Mode is
       Is_Audio : Boolean;
       T        : in out Raw_Track;
       Ok       : out Boolean)
-     with Global => null;
+     with Global => null,
+          Pre    => Inside (Data, Mdia),
+          Post   => T.Codec = T.Codec'Old
+                    or else T.Codec = (if Is_Audio then PCM_S16 else JPEG);
 
    procedure Read_Trak
      (Data   : Byte_Array;
       Trak   : Box_Header;
       Tables : in out Raw_Tables;
       Ok     : out Boolean)
-     with Global => null;
+     with Global => null,
+          Pre    => Inside (Data, Trak),
+          Post   => (Tables.Video.Codec = Tables.Video.Codec'Old
+                     or else Tables.Video.Codec = JPEG)
+                    and then (Tables.Audio.Codec = Tables.Audio.Codec'Old
+                              or else Tables.Audio.Codec = PCM_S16);
 
    --  Only the counts need resetting: they say which entries are valid.
    --  Assigning a default Raw_Track could build 1.5 MB on the stack.
@@ -610,6 +648,13 @@ package body Framewise.ISOBMFF.Tables with SPARK_Mode is
 
          exit when Child.Box_Last >= Moov.Box_Last;
          Position := Child.Box_Last + 1;
+         --  Every child starts inside moov's payload, so inside Data too.
+         pragma Loop_Invariant
+           (Position >= Moov.Payload_First and then Position <= Moov.Box_Last);
+         --  Read_Trak only ever sets the codec its track kind allows.
+         pragma Loop_Invariant
+           (Tables.Video.Codec in None | JPEG
+            and then Tables.Audio.Codec in None | PCM_S16);
          pragma Loop_Variant (Increases => Position);
       end loop;
 
