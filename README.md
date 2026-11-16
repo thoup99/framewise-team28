@@ -283,3 +283,48 @@ The only change needed was a loop invariant in `Find_Child`
 (`Position >= First`), so the prover can show every child it returns
 starts inside the range it was given. Next: the table readers, then
 the resolution loop.
+### Week 5 C: colour and JPEG comparison
+
+The 4:2:0 decoder now uses 16 fractional bits for the separable IDCT
+basis and YCbCr conversion. Rounding uses nearest with ties toward positive
+infinity. MCU composition remains pure Ada/SPARK, with bounded arrays,
+nearest-neighbour chroma upsampling, clipped RGB and alpha 255. No front-end
+or session API changed, and no C or file I/O was added to the engine.
+
+Build and run the checks from the repository root:
+
+```sh
+cd tests
+alr -n build
+./bin/jpeg_idct_tests
+./bin/jpeg_mcu_tests
+cd ..
+python3 tests/compare_jpeg.py
+alr exec -- gnatprove -P framewise.gpr --mode=flow --checks-as-errors=on
+```
+
+The Python comparison needs ffmpeg, Pillow >= 10.2, a C compiler and libjpeg
+development headers. The C helper is a test-only reference, never linked
+into the Ada decoder. It selects libjpeg's **floating IDCT** and disables
+fancy chroma upsampling to compare the mathematical separable transform
+with the same chroma policy. The former integer reference (`JDCT_ISLOW`)
+rounds intermediate results differently; a one-level chroma difference can
+become a three-level RGB difference. The comparison now enforces maximum
+channel error **2** and mean absolute error **below 0.5**, rather than
+loosening the limit for that reference mismatch. Alpha is included.
+
+Coverage includes ten small JPEGs with partial edge MCUs and restart
+intervals, five frames from each of two 960x540 ffmpeg MJPEG proxies,
+all 65,536 chroma pairs against real-valued colour equations, and extreme
+IDCT inputs. Small frames also undergo twenty seeded random truncations,
+evenly spaced truncations, every marker-boundary truncation and single-byte
+corruption. Truncations must fail with zeroed output and no exception.
+Full-size frames use `jpeg_compare ... --pixels-only` to avoid repeating
+per-byte corruption at 540p.
+
+Verified with GNAT 14 and GNATprove 16.1: warning-as-error library/test build,
+all existing library unit tests, the above pixel/robustness checks and full
+library SPARK flow analysis (316 checks) pass. The proxy comparison's worst
+channel error was 2 and worst mean error below 0.0001. These are synthetic
+media checks, not a claim of support for JPEG formats beyond baseline 4:2:0.
+Full JPEG runtime-safety proof remains the Week 7–8 task.

@@ -16,27 +16,30 @@ package body Framewise.JPEG.IDCT with SPARK_Mode is
       58, 59, 52, 45, 38, 31, 39, 46,
       53, 60, 61, 54, 47, 55, 62, 63];
 
-   --  Fixed-point cosine basis scaled by 4096.
+   --  Fixed-point cosine basis scaled by 65536.
    --  The first frequency includes the 1/sqrt(2) factor.
    type Basis_Matrix is
      array (Natural range 0 .. 7, Natural range 0 .. 7)
      of Integer;
 
    Basis : constant Basis_Matrix :=
-     [[2896,  4017,  3784,  3406,  2896,  2276,  1567,   799],
-      [2896,  3406,  1567,  -799, -2896, -4017, -3784, -2276],
-      [2896,  2276, -1567, -4017, -2896,   799,  3784,  3406],
-      [2896,   799, -3784, -2276,  2896,  3406, -1567, -4017],
-      [2896,  -799, -3784,  2276,  2896, -3406, -1567,  4017],
-      [2896, -2276, -1567,  4017, -2896,  -799,  3784, -3406],
-      [2896, -3406,  1567,   799, -2896,  4017, -3784,  2276],
-      [2896, -4017,  3784, -3406,  2896, -2276,  1567,  -799]];
+     [[46341,  64277,  60547,  54491,  46341,  36410,  25080,  12785],
+      [46341,  54491,  25080, -12785, -46341, -64277, -60547, -36410],
+      [46341,  36410, -25080, -64277, -46341,  12785,  60547,  54491],
+      [46341,  12785, -60547, -36410,  46341,  54491, -25080, -64277],
+      [46341, -12785, -60547,  36410,  46341, -54491, -25080,  64277],
+      [46341, -36410, -25080,  64277, -46341, -12785,  60547, -54491],
+      [46341, -54491,  25080,  12785, -46341,  64277, -60547,  36410],
+      [46341, -64277,  60547, -54491,  46341, -36410,  25080, -12785]];
 
+   --  With |coefficient| <= 2048, quantizer <= 255 and |basis| <= 65536,
+   --  the two passes are bounded by 2048 * 255 * 8 * 8 * 65536**2
+   --  (< 2**58), including final rounding: safely inside 64-bit arithmetic.
    type Wide_Block is
      array (Block_Index) of Long_Long_Integer;
 
    Divisor : constant Long_Long_Integer :=
-     4 * 4096 * 4096;
+     4 * 65_536 * 65_536;
 
    procedure Decode
      (Coefficients : Framewise.JPEG.Blocks.Coefficient_Array;
@@ -91,11 +94,12 @@ package body Framewise.JPEG.IDCT with SPARK_Mode is
                  Long_Long_Integer (Basis (Y, V));
             end loop;
 
-            --  Round the fixed-point result to the nearest integer.
+            --  Round to nearest, with half-way values toward positive infinity.
+            --  This matches the baseline reference IDCT rounding policy.
             if Total >= 0 then
                Sample := (Total + Divisor / 2) / Divisor;
             else
-               Sample := (Total - Divisor / 2) / Divisor;
+               Sample := -((-Total + Divisor / 2 - 1) / Divisor);
             end if;
 
             --  JPEG samples are level-shifted by 128.

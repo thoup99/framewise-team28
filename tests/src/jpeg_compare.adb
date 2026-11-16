@@ -1,5 +1,6 @@
 with Ada.Command_Line;
 with Ada.Streams.Stream_IO;
+with Ada.Numerics.Discrete_Random;
 with Ada.Text_IO;
 with Framewise.JPEG;
 
@@ -41,11 +42,15 @@ begin
       Pixels : J.Byte_Array (7 .. 6 + H.Width * H.Height * 4);
       Maximum, Difference : Natural := 0;
       Total : Long_Long_Integer := 0;
+      subtype Cut_Length is Natural range 0 .. Data'Length - 1;
+      package Cuts is new Ada.Numerics.Discrete_Random (Cut_Length);
+      Generator : Cuts.Generator;
       procedure Check_Truncation (Length : Natural);
       procedure Check_Truncation (Length : Natural) is
       begin
          J.Decode (Data (Data'First .. Data'First + Length - 1), H, Pixels, Ok);
          pragma Assert (not Ok, "truncated JPEG accepted");
+         pragma Assert (for all Pixel of Pixels => Pixel = 0);
       end Check_Truncation;
    begin
       J.Decode (Data, H, Pixels, Ok);
@@ -59,8 +64,18 @@ begin
       Ada.Text_IO.Put_Line
         ("max" & Maximum'Image & " mean" &
          Long_Float'Image (Long_Float (Total) / Long_Float (Reference'Length)));
-      pragma Assert (Maximum <= 3);
+      pragma Assert (Maximum <= 2);
       pragma Assert (Long_Float (Total) / Long_Float (Reference'Length) < 0.5);
+
+      if Ada.Command_Line.Argument_Count = 3 then
+         pragma Assert (Ada.Command_Line.Argument (3) = "--pixels-only");
+         return;
+      end if;
+
+      Cuts.Reset (Generator, 5);
+      for I in 1 .. 20 loop
+         Check_Truncation (Cuts.Random (Generator));
+      end loop;
 
       --  Fixed points throughout the entropy stream and every marker boundary.
       for I in 0 .. 20 loop

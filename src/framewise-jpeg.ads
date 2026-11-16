@@ -37,7 +37,7 @@
 --          R = Y + 1.402 (Cr-128)
 --          G = Y - 0.344 (Cb-128) - 0.714 (Cr-128)
 --          B = Y + 1.772 (Cb-128)
---       in fixed point (x256), clamp, write RGBA with A = 255.
+--       in fixed point (x65536), clamp, write RGBA with A = 255.
 --
 --  Proof targets: no index out of range in the Huffman lookup and the
 --  bit reader on any input (a truncated scan ends the decode with
