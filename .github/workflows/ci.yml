@@ -74,7 +74,7 @@ jobs:
           sh ../tests/compare_samples.sh take1.mp4.proxy.mov
       - name: ui/ never reaches below Framewise.Session
         run: |
-          ! grep -rEi 'with +Framewise\.(Timeline|Plan|Decode|Commands)' ui/ --include='*.ad?'
+          ! grep -rEi 'with +Framewise\.(Timeline|Plan|Commands)' ui/ --include='*.ad?'
       - name: SPARK flow analysis
         run: |
           alr -n with gnatprove

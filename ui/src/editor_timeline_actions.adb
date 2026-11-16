@@ -9,6 +9,18 @@ with Editor_Styles; use Editor_Styles;
 with Editor_Dialogs; use Editor_Dialogs;
 with Editor_Controller; use Editor_Controller;
 
+with Ada.Unchecked_Deallocation;
+with Interfaces.C;
+with System;
+with System.Storage_Elements;
+
+with Adi.Image;
+with Adi.SDL;
+with Adi.SDL.Pixelformat;
+with Adi.SDL.Surface;
+
+with Framewise.Decode;
+
 package body Editor_Timeline_Actions is
    use type Buttons.Button_Handle;
    use type Labels.Label_Handle;
@@ -17,6 +29,9 @@ package body Editor_Timeline_Actions is
    use type Timeline_View.Views.Handle;
    use type US.Unbounded_String;
    use type Framewise.Time;
+   use type Adi.SDL.Surface.SDL_Surface_Ptr;
+   use type System.Address;
+   use System.Storage_Elements;
 
    --  The menu remembers only a name, then resolves it against the live session.
    Clip_Menu_Target : US.Unbounded_String;
@@ -93,16 +108,197 @@ package body Editor_Timeline_Actions is
    end Cursor_Time_Changed;
 
    procedure Show_Preview (Text : String) is
+      type Pixel_Buffer_Access is access Framewise.Decode.RGBA_Buffer;
+
+      procedure Free is new Ada.Unchecked_Deallocation
+        (Framewise.Decode.RGBA_Buffer, Pixel_Buffer_Access);
+
+      function C_Memcpy
+        (Destination : System.Address;
+         Source      : System.Address;
+         Count       : Interfaces.C.size_t) return System.Address
+      with Import        => True,
+           Convention    => C,
+           External_Name => "memcpy";
+
+      Seq : constant FS.Sequence_View := Read_Sequence;
+      V   : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+
+      Found : Boolean := False;
    begin
       if Get_Focus_Handle (W) /= Widget_Handle'(+Cursor_Time_Input) then
-         declare
-            V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
-         begin
-            Inputs.Set_Text (Cursor_Time_Input, FS.Image_Time (V.Playhead));
-         end;
+         Inputs.Set_Text
+           (Cursor_Time_Input,
+            FS.Image_Time (V.Playhead));
       end if;
-      Labels.Set_Text (Preview, Text & Ada.Characters.Latin_1.LF &
-        "Video frame preview is not available yet.");
+
+      --  Find the clip underneath the playhead.
+      for Track of Seq.Tracks loop
+         if Track.Used then
+            for I in 1 .. Track.Count loop
+               declare
+                  C renames Track.Clips (I);
+
+                  Clip_End : constant Framewise.Time :=
+                    C.Start + C.Src_Out - C.Src_In;
+               begin
+                  if V.Playhead >= C.Start
+                    and then V.Playhead < Clip_End
+                  then
+                     Found := True;
+
+                     declare
+                        Source_Time : constant Framewise.Time :=
+                          C.Src_In + (V.Playhead - C.Start);
+
+                        Proxy_File : constant String :=
+                          Framewise.Image
+                            (Seq.Sources (C.Src).File) &
+                          ".proxy.mov";
+
+                        H      : Framewise.Decode.Handle;
+                        Opened : Boolean;
+                        Good   : Boolean;
+
+                        Pixels : Pixel_Buffer_Access :=
+                          new Framewise.Decode.RGBA_Buffer
+                            (1 .. Preview_Width *
+                                  Preview_Height * 4);
+                     begin
+                        Framewise.Decode.Open
+                          (H,
+                           Proxy_File,
+                           Opened);
+
+                        if not Opened then
+                           Free (Pixels);
+                           Labels.Set_Icon
+                             (Preview,
+                              Adi.Image.Null_Image_Handle);
+                           Labels.Set_Text
+                             (Preview,
+                              Text & Ada.Characters.Latin_1.LF &
+                              "Cannot open proxy.");
+                           return;
+                        end if;
+
+                        Framewise.Decode.Frame_At
+                          (H      => H,
+                           T      => Source_Time,
+                           Width  => Preview_Width,
+                           Height => Preview_Height,
+                           Pixels => Pixels.all,
+                           Ok     => Good);
+
+                        Framewise.Decode.Close (H);
+
+                        if not Good then
+                           Free (Pixels);
+                           Labels.Set_Icon
+                             (Preview,
+                              Adi.Image.Null_Image_Handle);
+                           Labels.Set_Text
+                             (Preview,
+                              Text & Ada.Characters.Latin_1.LF &
+                              "Cannot decode frame.");
+                           return;
+                        end if;
+
+                        declare
+                           Surface :
+                             Adi.SDL.Surface.SDL_Surface_Ptr :=
+                               Adi.SDL.Surface.SDL_CreateSurface
+                                 (Interfaces.C.int (Preview_Width),
+                                  Interfaces.C.int (Preview_Height),
+                                  Adi.SDL.Pixelformat.SDL_PIXELFORMAT_RGBA32);
+                        begin
+                           if Surface = null then
+                              Free (Pixels);
+                              Labels.Set_Text
+                                (Preview,
+                                 "Cannot create preview surface.");
+                              return;
+                           end if;
+
+                           --  Copy our pure-Ada RGBA pixels into SDL's
+                           --  display surface one row at a time.
+                           for Y in 0 .. Preview_Height - 1 loop
+                              declare
+                                 Result : constant System.Address :=
+                                   C_Memcpy
+                                     (Surface.pixels +
+                                        System.Storage_Elements.Storage_Offset
+                                          (Y * Natural (Surface.pitch)),
+                                      Pixels
+                                        (Pixels'First +
+                                         Y * Preview_Width * 4)'Address,
+                                      Interfaces.C.size_t
+                                        (Preview_Width * 4));
+                              begin
+                                 if Result = System.Null_Address then
+                                    Adi.SDL.Surface.SDL_DestroySurface
+                                      (Surface);
+                                    Free (Pixels);
+                                    Labels.Set_Text
+                                      (Preview,
+                                       "Cannot copy preview pixels.");
+                                    return;
+                                 end if;
+                              end;
+                           end loop;
+
+                           Free (Pixels);
+
+                           Adi.Image.Release (Preview_Image);
+
+                           Preview_Image :=
+                             Adi.Image.Create_From_Surface (Surface);
+
+                           if not Adi.Image.Is_Owned (Preview_Image) then
+                              Adi.SDL.Surface.SDL_DestroySurface
+                                (Surface);
+                              Labels.Set_Text
+                                (Preview,
+                                 "Cannot create preview image.");
+                              return;
+                           end if;
+
+                           Labels.Set_Text (Preview, "");
+
+                           Labels.Set_Icon
+                             (Preview,
+                              Adi.Image.To_Handle (Preview_Image));
+
+                           return;
+                        end;
+                     exception
+                        when others =>
+                           Framewise.Decode.Close (H);
+                           Free (Pixels);
+                           Labels.Set_Icon
+                             (Preview,
+                              Adi.Image.Null_Image_Handle);
+                           Labels.Set_Text
+                             (Preview,
+                              "Preview decode failed.");
+                           return;
+                     end;
+                  end if;
+               end;
+            end loop;
+         end if;
+      end loop;
+
+      --  Nothing is underneath the playhead.
+      if not Found then
+         Labels.Set_Icon
+           (Preview,
+            Adi.Image.Null_Image_Handle);
+
+         Adi.Image.Release (Preview_Image);
+
+         Labels.Set_Text (Preview, Text);
+      end if;
    end Show_Preview;
 
    procedure Reset_View is
