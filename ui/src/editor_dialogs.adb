@@ -52,6 +52,16 @@ package body Editor_Dialogs is
             end if;
             Execute_Line ("import " & US.To_String (Form_Target) & " " & FS.Quote_Path (Field (1)) &
               " " & Field (2) & " " & Combos.Get_Selected_Text (Kind_Choice));
+            if Reply.Ok then
+               Tell ("Generating media proxy...");
+               --  Proxy generation is a session command, just as in the CLI.
+               --  A failed import must never start it or hide its error.
+               Execute_Line ("proxy " & US.To_String (Form_Target));
+               --  The source is already registered even if ffmpeg fails.
+               --  Close the import form; retain the proxy error in status/log.
+               Dialogs.Hide (Form);
+               return;
+            end if;
          when Add_Track =>
             if Field (1)'Length not in 1 .. Framewise.Max_Name or else
               (for some C of Field (1) => C not in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_')

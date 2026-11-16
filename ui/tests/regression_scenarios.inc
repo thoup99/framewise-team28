@@ -255,9 +255,18 @@
          Stage ("import callback, filters and canceled import");
          Import_Selected (Files (Test_Dir & "/video clip.mp4"));
          Check (Dialogs.Is_Shown (Form), "Import should request duration");
+         Inputs.Set_Text (Values (2), "invalid");
+         Apply;
+         Check (not Reply.Ok and then Dialogs.Is_Shown (Form),
+                "Failed import must keep its error visible");
+         Check (not Ada.Directories.Exists (Test_Dir & "/video clip.mp4.proxy.mov"),
+                "Failed import must not generate a proxy");
          Inputs.Set_Text (Values (2), "3");
          Apply;
          Check (Reply.Ok, "Video import should succeed");
+         Check_Editor_Log ("proxy " & US.To_String (Form_Target));
+         Check (Ada.Directories.Exists (Test_Dir & "/video clip.mp4.proxy.mov"),
+                "GUI import must generate the preview proxy automatically");
          Check_Editor_Log ("import " & US.To_String (Form_Target) & " " & FS.Quote_Path (Test_Dir & "/video clip.mp4") & " 3 video");
          Execute_Line ("import music " & Test_Dir & "/audio.wav 3 audio");
          Check (Reply.Ok, "Audio registration");
