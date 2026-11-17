@@ -1,3 +1,4 @@
+
 with Ada.Strings.Unbounded;
 with Adi.App;
 with Adi.Image;
@@ -59,7 +60,7 @@ package Editor_Context is
    Captions : Label_Array;
 
    File_Button, Add_Track_Button, Place_Button, Undo_Button,
-     Delete_Button, Razor_Button, Move_Button,
+     Delete_Button, Razor_Button, Trim_Mode_Button, Move_Button,
      Zoom_In, Zoom_Out, Scroll_Left, Scroll_Right,
      Start_Button, Play_Button, End_Button : Buttons.Button_Handle;
 

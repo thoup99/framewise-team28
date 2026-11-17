@@ -1,3 +1,4 @@
+
 with Ada.Characters.Latin_1;
 with Ada.Real_Time;
 with Adi.Core; use Adi.Core;
@@ -262,7 +263,6 @@ package body Editor_Timeline_Actions is
                            Ok     => Good,
                            Preserve_Aspect => True);
 
-
                         if not Good then
                            Free (Pixels);
                            Labels.Set_Icon
@@ -384,6 +384,8 @@ package body Editor_Timeline_Actions is
       V.First_Second := 0.0;
       V.Razor_Mode := False;
       Set_Selected (+Razor_Button, False);
+      V.Standard_Left_Trim := True;
+      Set_Selected (+Trim_Mode_Button, False);
       Timeline_View.Set_Razor_Pointer (V.Ptr.all, 0.0, 0.0, False);
       V.Drag_Active := False;
       V.Scrubbing := False;
@@ -519,6 +521,12 @@ package body Editor_Timeline_Actions is
                  (if V.Razor_Mode then "Razor: click inside a clip to split"
                   else ""));
                Set_Visible (+Tool_Status, V.Razor_Mode);
+            elsif Button = Widget_Handle'(+Trim_Mode_Button) then
+               V.Standard_Left_Trim := not V.Standard_Left_Trim;
+               Set_Selected (+Trim_Mode_Button, not V.Standard_Left_Trim);
+               Tell ((if V.Standard_Left_Trim then
+                 "Left trim: Standard (right edge stays fixed)."
+                 else "Left trim: In Place (clip returns to its original start)."));
             elsif Button = Widget_Handle'(+Zoom_In) then
                V.Zoom := Long_Float'Min (256.0, V.Zoom * 2.0);
             elsif Button = Widget_Handle'(+Zoom_Out) then

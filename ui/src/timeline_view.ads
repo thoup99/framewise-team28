@@ -37,6 +37,11 @@ package Timeline_View is
       Drag_Start_Time : Long_Float := 0.0;
       Drag_Trim_Left  : Boolean := False;
       Drag_Trim_Right : Boolean := False;
+
+      --  Standard: the right edge of the clip stays fixed.
+      --  In-place: the timeline start of the clip stays fixed.
+      Standard_Left_Trim : Boolean := True;
+      Drag_Standard_Left_Trim : Boolean := True;
       Drag_Src_In     : Long_Float := 0.0;
       Drag_Src_Out    : Long_Float := 0.0;
    end record;

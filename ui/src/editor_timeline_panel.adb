@@ -1,3 +1,4 @@
+
 with Adi.Core; use Adi.Core;
 with Adi.CSS_Styles; use Adi.CSS_Styles;
 with Adi.Widget; use Adi.Widget;
@@ -27,12 +28,26 @@ package body Editor_Timeline_Panel is
           Padding => Set (CSS_Box (Px (7.0), Px (10.0))),
           Border_Radius => Set (Radius (Px (3.0))), others => <>))
         .On_Selected ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
+
+      --  Selected means in-place left trimming is enabled.
+      --  Not selected means standard left trimming.
+      Trim_Mode_Button := Make_Button (+Timeline_Tools, "In-Place Trim", Show_Tooltip => False);
+      Set_Part_Style (+Trim_Mode_Button, Main_Part, Style.Base
+        ((Background_Color => Set_Bg (RGB (38, 50, 67)),
+          Padding => Set (CSS_Box (Px (7.0), Px (10.0))),
+          Border_Radius => Set (Radius (Px (3.0))), others => <>))
+        .On_Selected ((Background_Color => Set_Bg (RGB (52, 112, 204)), others => <>)).Build);
+      Set_Selected (+Trim_Mode_Button, False);
+      Editor_Tooltips.Register (+Trim_Mode_Button,
+        "Selected: left trim stays in place. Not selected: normal left trim keeps the right edge fixed.");
+
       Move_Button := Make_Button (+Timeline_Tools, "Move Clip", Show_Tooltip => False);
       Delete_Button := Make_Button (+Timeline_Tools, "Delete Clip");
       Zoom_Out := Make_Button (+Timeline_Tools, "Zoom -", Show_Tooltip => False);
       Zoom_In := Make_Button (+Timeline_Tools, "Zoom +", Show_Tooltip => False);
       Scroll_Left := Make_Button (+Timeline_Tools, "Earlier", Show_Tooltip => False);
       Scroll_Right := Make_Button (+Timeline_Tools, "Later", Show_Tooltip => False);
+
       Add_Label (+Timeline_Tools, "Snap (s)");
       Snap_Interval_Input := Inputs.Create_Handle ("0.5");
       Inputs.Set_Min_Visible_Chars (Snap_Interval_Input, 6);
@@ -72,6 +87,7 @@ package body Editor_Timeline_Panel is
       Track_Choice := Combos.Create_Handle;
       Style_Combo (Track_Choice);
       Add_Child (+Placement_Row, +Track_Choice);
+
       Place_Button := Make_Button (+Placement_Row, "Add Selected Media to Track");
       Tool_Status := Make_Label (+Placement_Row, "");
       Set_Visible (+Tool_Status, False);
@@ -83,6 +99,7 @@ package body Editor_Timeline_Panel is
       Tracks := Timeline_View.Views.New_Widget;
       Set_Flag (+Tracks, Clickable, True);
       Set_Flag (+Tracks, Focusable, True);
+
       declare
          V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
       begin
@@ -97,8 +114,6 @@ package body Editor_Timeline_Panel is
         ((Flex_Grow => Set (1.0), Min_Height => Set (Size (Px (80.0))),
           Overflow_Y => Set (Overflow_Auto), others => <>)).Build);
       Set_Flag (+Track_Scroll, Scrollable, True);
-      --  Route presses in the gutter to the scroll container rather than
-      --  the clickable split pane ancestor.
       Set_Flag (+Track_Scroll, Clickable, True);
       Style_Scrollbar (+Track_Scroll);
 
@@ -122,6 +137,7 @@ package body Editor_Timeline_Panel is
       Build_Tools;
       Build_Placement_Row;
       Build_Track_Viewport;
+
       declare
          Sections : constant Box_Array := [Timeline_Tools, Placement_Row, Track_Scroll];
       begin
@@ -130,4 +146,5 @@ package body Editor_Timeline_Panel is
          end loop;
       end;
    end Build;
+
 end Editor_Timeline_Panel;
