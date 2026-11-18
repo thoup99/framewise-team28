@@ -739,7 +739,7 @@ package body Timeline_View is
    end On_Mouse_Down;
 
    overriding procedure On_Mouse_Move
-      (W   : in out Track_widget;
+      (W   : in out Track_Widget;
       X, Y : Pixel_Type)
    is
    begin
@@ -776,7 +776,7 @@ package body Timeline_View is
       Update_Drag_Modifiers (W, Adi.SDL.Events.SDL_GetModState);
       W.Drag_Current_X := X;
       W.Drag_Active := False;
-      Mark_Dirty(W);
+      Mark_Dirty (W);
 
       --  Ignore clicks without meaningful mouse movement.
       if abs (X - W.Drag_Start_X) < 3.0
@@ -851,6 +851,18 @@ package body Timeline_View is
          end;
 
       elsif W.Drag_Trim_Right then
+         --  A trim snapped to zero duration must be ignored. The visual
+         --  preview clamps to one tick, but serializing that minimum as
+         --  decimal seconds can round back to zero in the command parser.
+         if Snap_Time
+           (W, Long_Float'Max
+             (0.0, W.Drag_Src_Out +
+               Long_Float (X - W.Drag_Start_X) / W.Zoom))
+             <= W.Drag_Src_In
+         then
+            return;
+         end if;
+
          --  Dragging the right edge changes the source out-point.
          New_Time :=
            Trim_Position (W, X);
