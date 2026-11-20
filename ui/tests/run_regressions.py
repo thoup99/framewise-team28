@@ -14,6 +14,7 @@ REPO = UI.parent
 def generate(destination):
     destination.mkdir(parents=True, exist_ok=True)
     source = """with Adi.Core; use Adi.Core;
+with Adi.Image;
 with Adi.CSS_Styles; use Adi.CSS_Styles;
 with Adi.Widget; use Adi.Widget;
 with Adi.Widget_Styles; use Adi.Widget_Styles;
@@ -38,6 +39,7 @@ with Editor_Dialogs; use Editor_Dialogs;
 with Editor_Application;
 with Editor_Tooltips;
 with Editor_Export;
+with Editor_Timeline_Actions;
 
 procedure Framewise_UI_Regression is
    use type Buttons.Button_Handle;
@@ -107,6 +109,11 @@ def main():
         directory = Path(work)
         run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i',
              'color=c=blue:s=160x90:r=30', '-t', '3', '-c:v', 'mpeg4', str(directory / 'video clip.mp4')])
+        run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i',
+             'sine=frequency=440:sample_rate=48000', '-t', '3', str(directory / 'audio.wav')])
+        run(['ffmpeg', '-v', 'error', '-y', '-i', str(directory / 'video clip.mp4'),
+             '-i', str(directory / 'audio.wav'), '-c:v', 'copy', '-c:a', 'aac',
+             '-shortest', str(directory / 'both.mp4')])
         environment = os.environ.copy()
         environment.setdefault('SDL_VIDEODRIVER', 'dummy')
         environment.setdefault('SDL_RENDER_DRIVER', 'software')
@@ -124,6 +131,21 @@ def main():
             cwd=REPO)
         assert (directory / 'gui.fw').read_bytes() == (directory / 'cli.fw').read_bytes(), \
             'GUI and CLI saved documents differ'
+        # The same automatic command is available to the CLI. Reusing a
+        # valid proxy must not regenerate it; resolved history must replay
+        # without needing that proxy at all.
+        proxy = directory / 'video clip.mp4.proxy.mov'
+        stamp = proxy.stat().st_mtime_ns
+        automatic = directory / 'automatic.fw'
+        run([str(cli), '-c', f'import auto "{directory / "video clip.mp4"}"',
+             '-c', f'save "{automatic}"'], cwd=REPO)
+        assert proxy.stat().st_mtime_ns == stamp, 'Existing proxy was regenerated'
+        assert f'import auto "{directory / "video clip.mp4"}" 3 video' in automatic.read_text()
+        proxy.unlink()
+        replay = directory / 'automatic-replay.fw'
+        run([str(cli), '-c', f'load "{automatic}"', '-c', 'track temporary video',
+             '-c', 'undo', '-c', f'save "{replay}"'], cwd=REPO)
+        assert automatic.read_bytes() == replay.read_bytes(), 'Resolved import did not replay'
         print('PASS: real GUI export probed and GUI/CLI documents identical', flush=True)
 
 

@@ -11,6 +11,7 @@ package body Framewise.Session is
    procedure Set (R : out Response; Ok : Boolean; Msg : String) renames Responses.Set;
    procedure Append (R : in out Response; Msg : String) renames Responses.Append;
    procedure Apply (S : in out Session; C : Command; R : out Response);
+   function Proxy_Command (Source : String) return String;
    procedure Replay (S : in out Session);
    procedure Do_List (S : Session; R : out Response);
    procedure Do_Info (S : Session; N : Name; R : out Response);
@@ -343,8 +344,42 @@ package body Framewise.Session is
                Set (R, False, "err history full");
                return;
             end if;
+            if C.K = Import and then C.Length = 0 then
+               --  Prepare media at the session boundary, never in a front end.
+               --  Explicit-length imports keep their existing replay semantics.
+               if Find_Source (S.Seq, C.Src_Name) /= No_Source then
+                  Set (R, False, "err source exists or table full");
+                  return;
+               end if;
+               if not GNAT.OS_Lib.Is_Regular_File (Image (C.File) & ".proxy.mov") then
+                  declare
+                     Status : Integer;
+                     Found : Boolean;
+                  begin
+                     Shell.Run (Proxy_Command (Image (C.File)), Status, Found);
+                     if not Found or else Status /= 0 then
+                        Set (R, False, "err cannot create media proxy; check the file and FFmpeg");
+                        return;
+                     end if;
+                  end;
+               end if;
+            end if;
             Apply (S, C, R);
             if R.Ok then
+               if C.K = Import and then C.Length = 0 then
+                  --  Store resolved metadata so undo/save/load do not probe or
+                  --  regenerate media and remain deterministic without proxies.
+                  declare
+                     Src : Source renames S.Seq.Sources (Find_Source (S.Seq, C.Src_Name));
+                  begin
+                     C.Length := Src.Length;
+                     case Src.Kind is
+                        when Timeline.Video => C.Src_Kind := Commands.Video;
+                        when Timeline.Audio => C.Src_Kind := Commands.Audio;
+                        when Timeline.Both  => C.Src_Kind := Commands.Both;
+                     end case;
+                  end;
+               end if;
                S.Count := S.Count + 1;
                S.History (S.Count) := C;
             end if;

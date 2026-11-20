@@ -128,6 +128,8 @@ package body Editor_Controller is
    begin
       --  Buttons, gestures and console submissions share execution, refresh
       --  and logging so an edit is always recorded exactly once.
+      --  Commands can reload a project or replace an existing proxy file.
+      Editor_Timeline_Actions.Release_Preview;
       FS.Execute (Editor, Line, Reply);
       Refresh_Timeline;
       if Reply.Ok then

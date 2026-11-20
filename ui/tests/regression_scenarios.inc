@@ -52,6 +52,31 @@
             Form_Result (Null_Handle, 1, "Apply");
          end Apply;
 
+         procedure Assert_Preview_Fills is
+            use type Adi.Image.Image_Handle;
+            Bounds : constant Rectangle := Get_Geometry (+Preview);
+            Found : Boolean := False;
+         begin
+            for I in 1 .. Item_Count (+Preview) loop
+               declare
+                  Drawn : constant Item := Get_Item (+Preview, I);
+               begin
+                  if Drawn.Kind = Image_Item and then
+                    Drawn.Image_Source /= Adi.Image.Null_Image_Handle
+                  then
+                     Found := True;
+                     Check (abs (Drawn.Geometry.Width - Bounds.Width) <= 1.0 and then
+                            abs (Drawn.Geometry.Height - Bounds.Height) <= 1.0,
+                            "Preview canvas must fill the entire black panel");
+                     Check (abs (Drawn.Geometry.X - Bounds.X) <= 1.0 and then
+                            abs (Drawn.Geometry.Y - Bounds.Y) <= 1.0,
+                            "Preview canvas must be centered in the panel");
+                  end if;
+               end;
+            end loop;
+            Check (Found, "Preview must contain a decoded image");
+         end Assert_Preview_Fills;
+
          procedure Assert_Centered is
             L : constant Rectangle := Get_Geometry (+Start_Button);
             R : constant Rectangle := Get_Geometry (+End_Button);
@@ -252,17 +277,37 @@
                    "Canceled file pickers do not create phantom command entries");
          end;
 
-         Stage ("import callback, filters and canceled import");
+         Stage ("automatic GUI import detects duration without a form");
+         Initial_History := History;
+         Import_Selected (Files (Test_Dir & "/missing.mp4"));
+         Check (not Reply.Ok and then History = Initial_History,
+                "Failed automatic import must not register a source");
+         Check (not Dialogs.Is_Shown (Form), "Automatic import does not request duration");
+         Check (not Ada.Directories.Exists (Test_Dir & "/missing.mp4.proxy.mov"),
+                "Failed import must not leave a usable proxy");
          Import_Selected (Files (Test_Dir & "/video clip.mp4"));
-         Check (Dialogs.Is_Shown (Form), "Import should request duration");
-         Inputs.Set_Text (Values (2), "3");
-         Apply;
          Check (Reply.Ok, "Video import should succeed");
-         Check_Editor_Log ("import " & US.To_String (Form_Target) & " " & FS.Quote_Path (Test_Dir & "/video clip.mp4") & " 3 video");
-         Execute_Line ("import music " & Test_Dir & "/audio.wav 3 audio");
+         Check (not Dialogs.Is_Shown (Form), "Successful import requires no duration dialog");
+         Check (Ada.Directories.Exists (Test_Dir & "/video clip.mp4.proxy.mov"),
+                "GUI import must generate the preview proxy automatically");
+         Check_Editor_Log ("import " & US.To_String (Form_Target) & " " &
+           FS.Quote_Path (Test_Dir & "/video clip.mp4"));
+         Check (FS.Sequence_Of (Editor).Sources (1).Length = 3 * Framewise.Timebase,
+                "GUI import detects the actual three-second duration");
+         Check (FS.Sequence_Of (Editor).Sources (1).Kind'Image = "VIDEO",
+                "GUI import detects the media kind");
+         Check (FS.History_Line (Editor, 1) = "import " & US.To_String (Form_Target) & " " &
+           FS.Quote_Path (Test_Dir & "/video clip.mp4") & " 3 video",
+                "Saved import history must contain resolved duration and kind");
+         Execute_Line ("import music " & FS.Quote_Path (Test_Dir & "/audio.wav"));
          Check (Reply.Ok, "Audio registration");
-         Execute_Line ("import combined " & Test_Dir & "/both.mp4 3 both");
+         Check (FS.Sequence_Of (Editor).Sources (2).Length = 3 * Framewise.Timebase and then
+                FS.Sequence_Of (Editor).Sources (2).Kind'Image = "AUDIO",
+                "Audio duration and kind are detected automatically");
+         Execute_Line ("import combined " & FS.Quote_Path (Test_Dir & "/both.mp4"));
          Check (Reply.Ok, "Combined media registration");
+         Check (FS.Sequence_Of (Editor).Sources (3).Kind'Image = "BOTH",
+                "Combined media kind is detected automatically");
          Initial_History := History;
          Check (Combos.Option_Count (Source_Choice) = 3, "All filter source count");
          Clicked (+Filter_Buttons (Video_Media));
@@ -330,6 +375,62 @@
          Inputs.Set_Text (Values (3), "0");
          Apply;
          Check (Reply.Ok, "Place selected media");
+         Stage ("scrub motion coalesces preview work and release renders exactly");
+         declare
+            Before_History : constant US.Unbounded_String := History;
+            V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+         begin
+            Labels.Set_Text (Preview, "pending scrub");
+            V.Scrubbing := True;
+            for I in 1 .. 30 loop
+               Timeline_View.Set_Playhead (V.Ptr.all, Framewise.Time (I * 90));
+            end loop;
+            Check (Labels.Get_Text (Preview) = "pending scrub",
+                   "Mouse motion must not decode synchronously");
+            Check (Inputs.Get_Text (Cursor_Time_Input) = FS.Image_Time (V.Playhead),
+                   "Cursor input follows every motion without waiting for decoding");
+            delay 0.09;
+            Editor_Timeline_Actions.Poll_Preview (W);
+            Check (Labels.Get_Text (Preview) = "", "Frame tick renders the newest pending position");
+            Labels.Set_Text (Preview, "pending release");
+            V.Scrubbing := False;
+            Timeline_View.Set_Playhead (V.Ptr.all, Framewise.Timebase / 2);
+            Check (Labels.Get_Text (Preview) = "", "Mouse release renders the exact final frame");
+            Check (History = Before_History, "Scrubbing must not change edit history");
+         end;
+
+         Stage ("preview canvas follows both resizable panel dimensions");
+         Render (W);
+         delay 0.09;
+         Editor_Timeline_Actions.Poll_Preview (W);
+         Render (W);
+         Assert_Preview_Fills;
+         declare
+            Horizontal : Editor_Split.Views.Ref := Editor_Split.Views.Borrow (Workspace);
+            Vertical : Editor_Split.Views.Ref := Editor_Split.Views.Borrow (Main_Split);
+            Old_Horizontal : constant Float := Horizontal.Fraction;
+            Old_Vertical : constant Float := Vertical.Fraction;
+         begin
+            Horizontal.Fraction := 0.6;
+            Vertical.Fraction := 0.3;
+            Mark_Dirty (+Workspace);
+            Mark_Dirty (+Main_Split);
+            Render (W);
+            delay 0.09;
+            Editor_Timeline_Actions.Poll_Preview (W);
+            Render (W);
+            Assert_Preview_Fills;
+            Horizontal.Fraction := Old_Horizontal;
+            Vertical.Fraction := Old_Vertical;
+            Mark_Dirty (+Workspace);
+            Mark_Dirty (+Main_Split);
+            Render (W);
+            delay 0.09;
+            Editor_Timeline_Actions.Poll_Preview (W);
+            Render (W);
+            Assert_Preview_Fills;
+         end;
+
          Check_Editor_Log ("place " & US.To_String (Clip_Name) & " Main_Video " &
            Combos.Get_Selected_Text (Source_Choice) & " 0 2 0");
          declare

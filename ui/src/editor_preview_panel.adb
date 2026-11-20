@@ -6,30 +6,53 @@ with Editor_Context; use Editor_Context;
 with Editor_Styles; use Editor_Styles;
 with Editor_Widgets; use Editor_Widgets;
 with Adi.Image;
+with Adi.Widget.Extension;
 
 package body Editor_Preview_Panel is
    use type Buttons.Button_Handle;
    use type Labels.Label_Handle;
    use type Boxes.Box_Handle;
 
+   --  A preview is scalable canvas content, not an intrinsic-size label icon.
+   --  Keep the label interface for status text while drawing the image over
+   --  the allocated geometry directly, without growing the panel's minimum.
+   type Preview_Canvas is new Labels.Label_Widget with null record;
+   overriding procedure Layout (Canvas : in out Preview_Canvas) is null;
+   overriding procedure Build_Items (Canvas : in out Preview_Canvas);
+   overriding function Measure_Content (Canvas : Preview_Canvas) return Size_2D is ((0.0, 0.0));
+   overriding function Measure_Content_At_Width
+     (Canvas : Preview_Canvas; Assigned_Width : Pixel_Type) return Size_2D is ((0.0, 0.0));
+   overriding function Get_Content_Min_Size (Canvas : Preview_Canvas) return Size_2D is ((0.0, 0.0));
+   overriding function Get_Content_Min_Size_At_Width
+     (Canvas : Preview_Canvas; Assigned_Width : Pixel_Type) return Size_2D is ((0.0, 0.0));
+
+   package Canvases is new Adi.Widget.Extension (Preview_Canvas);
+
+   overriding procedure Build_Items (Canvas : in out Preview_Canvas) is
+      Area : constant Rectangle := Get_Geometry (Canvas);
+   begin
+      Clear_Items (Canvas);
+      Add_Item (Canvas, Make_Panel (Main_Part, Area, 0));
+      Add_Item (Canvas, Make_Image
+        (Icon_Part, Area, Labels.Get_Icon (Labels.Label_Widget (Canvas)), 1));
+      Add_Item (Canvas, Make_Text
+        (Label_Part, Area, Labels.Get_Text (Labels.Label_Widget (Canvas)), 2));
+   end Build_Items;
+
    procedure Build is
    begin
       Add_Label (+Monitor, "Video Preview");
-      Preview := Make_Label (+Monitor, "");
+      Preview := Labels.Try_As_Label (Canvases.To_Widget_Handle (Canvases.New_Widget));
+      Add_Child (+Monitor, +Preview);
+      Set_Part_Style (+Preview, Label_Part, Style.Base (Text_Style).Build);
       Set_Part_Style (+Preview, Main_Part, Style.Base
         ((Flex_Grow => Set (1.0), Height => Set (Size (Px (0.0))), Min_Height => Set (Size (Px (40.0))),
-          Padding => Set (CSS_Box (Px (24.0))),
+          Min_Width => Set (Size (Px (0.0))),
+          Justify_Content => Set (Justify_Content_Value'(Center)),
+          Align_Items => Set (Align_Items_Value'(Center)),
+          Padding => Set (CSS_Box (Px (0.0))),
           Background_Color => Set_Bg (RGB (0, 0, 0)), others => <>)).Build);
       
-      Set_Part_Style
-        (+Preview,
-         Icon_Part,
-         Style.Base
-           ((Width       => Set (Size (Px (Float (Preview_Width)))),
-             Height      => Set (Size (Px (Float (Preview_Height)))),
-             Flex_Shrink => Set (0.0),
-             others      => <>)).Build);
-
       Set_Part_Style (+Playback_Row, Main_Part, Style.Base
         ((Row_Style with delta Justify_Content => Set (Justify_Content_Value'(Center)),
           Align_Items => Set (Align_Items_Value'(Center)))).Build);

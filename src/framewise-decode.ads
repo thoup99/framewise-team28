@@ -1,6 +1,6 @@
 --  Frame access for the GUI preview, thumbnails and analysis.
 --  Pure Ada, built on Framewise.ISOBMFF (container) and Framewise.JPEG
---  (codec). PLACEHOLDER in the seed: Open reports Ok = False.
+--  (codec). Keeps an open proxy and caches its last decoded native frame.
 --
 --  What it reads: the PROXY, never the original. `proxy NAME` makes
 --  FILE.proxy.mov with ffmpeg: Motion JPEG at 540p (every frame is a
@@ -39,6 +39,7 @@
 
 with Ada.Streams.Stream_IO;
 with Framewise.ISOBMFF;
+with Framewise.JPEG;
 
 package Framewise.Decode is
 
@@ -56,12 +57,20 @@ package Framewise.Decode is
 
    procedure Frame_At
      (H : in out Handle; T : Time; Width, Height : Positive;
-      Pixels : out RGBA_Buffer; Ok : out Boolean)
+      Pixels : out RGBA_Buffer; Ok : out Boolean; Preserve_Aspect : Boolean := False)
      with Pre => Pixels'Length >= Width * Height * 4;
-   --  Milestone 2. Scaled to Width x Height, straight alpha 255.
+   --  Scaled to Width x Height, straight alpha 255. Repeated requests within
+   --  one sample reuse decoded pixels; Open/Close discard the cache.
+   --  Preserve_Aspect fits the frame inside the requested canvas, centered
+   --  on opaque black, without cropping or stretching.
 
 private
+   type JPEG_Buffer_Access is access Framewise.JPEG.Byte_Array;
+
    type Handle is limited record
+      Cached_Index : ISOBMFF.Sample_Index := 0;
+      Cached_Header : Framewise.JPEG.Header;
+      Cached_Pixels : JPEG_Buffer_Access := null;
       Opened : Boolean := False;
       File   : Ada.Streams.Stream_IO.File_Type;
       Map    : ISOBMFF.File_Map;

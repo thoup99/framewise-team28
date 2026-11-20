@@ -1,4 +1,5 @@
 with Ada.Characters.Latin_1;
+with Ada.Real_Time;
 with Adi.Core; use Adi.Core;
 with Adi.CSS_Styles; use Adi.CSS_Styles;
 with Adi.Widget_Styles; use Adi.Widget_Styles;
@@ -31,6 +32,8 @@ package body Editor_Timeline_Actions is
    use type Framewise.Time;
    use type Adi.SDL.Surface.SDL_Surface_Ptr;
    use type System.Address;
+   use all type FS.Media_Kind;
+   use type Ada.Real_Time.Time;
    use System.Storage_Elements;
 
    --  The menu remembers only a name, then resolves it against the live session.
@@ -107,7 +110,65 @@ package body Editor_Timeline_Actions is
       end if;
    end Cursor_Time_Changed;
 
+   Preview_Decoder : Framewise.Decode.Handle;
+   Active_Proxy : US.Unbounded_String;
+   Rendered_Width, Rendered_Height : Natural := 0;
+   Pending_Preview : Boolean := False;
+   Pending_Text : US.Unbounded_String;
+   Last_Preview : Ada.Real_Time.Time := Ada.Real_Time.Clock;
+
+   procedure Release_Preview is
+   begin
+      Framewise.Decode.Close (Preview_Decoder);
+      Active_Proxy := US.Null_Unbounded_String;
+      Pending_Preview := False;
+   end Release_Preview;
+
+   procedure Render_Preview (Text : String);
+
    procedure Show_Preview (Text : String) is
+      V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+   begin
+      if Get_Focus_Handle (W) /= Widget_Handle'(+Cursor_Time_Input) then
+         Inputs.Set_Text (Cursor_Time_Input, FS.Image_Time (V.Playhead));
+      end if;
+      Pending_Text := US.To_Unbounded_String (Text);
+      Pending_Preview := True;
+      --  Mouse motion only updates UI state. Navigation and mouse release
+      --  render the precise final position immediately.
+      if not V.Scrubbing then
+         Pending_Preview := False;
+         Render_Preview (Text);
+         Last_Preview := Ada.Real_Time.Clock;
+      end if;
+   end Show_Preview;
+
+   procedure Poll_Preview (Win : Window_Handle) is
+      pragma Unreferenced (Win);
+      Area : constant Rectangle := Get_Geometry (+Preview);
+      Width : constant Positive := Positive (Integer'Max (1, Integer (Pixel_Type'Floor (Area.Width))));
+      Height : constant Positive := Positive (Integer'Max (1, Integer (Pixel_Type'Floor (Area.Height))));
+   begin
+      --  Panel/window resizing changes the canvas even if the playhead is still.
+      if Width /= Rendered_Width or else Height /= Rendered_Height then
+         declare
+            V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+         begin
+            Pending_Text := US.To_Unbounded_String
+              (Timeline_View.Preview_Text (Read_Sequence, V.Playhead));
+            Pending_Preview := True;
+         end;
+      end if;
+      if Pending_Preview and then
+        Ada.Real_Time.Clock >= Last_Preview + Ada.Real_Time.Milliseconds (80)
+      then
+         Pending_Preview := False;
+         Render_Preview (US.To_String (Pending_Text));
+         Last_Preview := Ada.Real_Time.Clock;
+      end if;
+   end Poll_Preview;
+
+   procedure Render_Preview (Text : String) is
       type Pixel_Buffer_Access is access Framewise.Decode.RGBA_Buffer;
 
       procedure Free is new Ada.Unchecked_Deallocation
@@ -124,8 +185,15 @@ package body Editor_Timeline_Actions is
       Seq : constant FS.Sequence_View := Read_Sequence;
       V   : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
 
+      Area : constant Rectangle := Get_Geometry (+Preview);
+      Preview_Width : constant Positive :=
+        Positive (Integer'Max (1, Integer (Pixel_Type'Floor (Area.Width))));
+      Preview_Height : constant Positive :=
+        Positive (Integer'Max (1, Integer (Pixel_Type'Floor (Area.Height))));
       Found : Boolean := False;
    begin
+      Rendered_Width := Preview_Width;
+      Rendered_Height := Preview_Height;
       if Get_Focus_Handle (W) /= Widget_Handle'(+Cursor_Time_Input) then
          Inputs.Set_Text
            (Cursor_Time_Input,
@@ -134,7 +202,7 @@ package body Editor_Timeline_Actions is
 
       --  Find the clip underneath the playhead.
       for Track of Seq.Tracks loop
-         if Track.Used then
+         if Track.Used and then Track.Kind /= Audio then
             for I in 1 .. Track.Count loop
                declare
                   C renames Track.Clips (I);
@@ -156,7 +224,6 @@ package body Editor_Timeline_Actions is
                             (Seq.Sources (C.Src).File) &
                           ".proxy.mov";
 
-                        H      : Framewise.Decode.Handle;
                         Opened : Boolean;
                         Good   : Boolean;
 
@@ -165,10 +232,14 @@ package body Editor_Timeline_Actions is
                             (1 .. Preview_Width *
                                   Preview_Height * 4);
                      begin
-                        Framewise.Decode.Open
-                          (H,
-                           Proxy_File,
-                           Opened);
+                        Opened := True;
+                        if US.To_String (Active_Proxy) /= Proxy_File then
+                           Release_Preview;
+                           Framewise.Decode.Open (Preview_Decoder, Proxy_File, Opened);
+                           if Opened then
+                              Active_Proxy := US.To_Unbounded_String (Proxy_File);
+                           end if;
+                        end if;
 
                         if not Opened then
                            Free (Pixels);
@@ -183,14 +254,14 @@ package body Editor_Timeline_Actions is
                         end if;
 
                         Framewise.Decode.Frame_At
-                          (H      => H,
+                          (H      => Preview_Decoder,
                            T      => Source_Time,
                            Width  => Preview_Width,
                            Height => Preview_Height,
                            Pixels => Pixels.all,
-                           Ok     => Good);
+                           Ok     => Good,
+                           Preserve_Aspect => True);
 
-                        Framewise.Decode.Close (H);
 
                         if not Good then
                            Free (Pixels);
@@ -273,7 +344,7 @@ package body Editor_Timeline_Actions is
                         end;
                      exception
                         when others =>
-                           Framewise.Decode.Close (H);
+                           Release_Preview;
                            Free (Pixels);
                            Labels.Set_Icon
                              (Preview,
@@ -299,11 +370,12 @@ package body Editor_Timeline_Actions is
 
          Labels.Set_Text (Preview, Text);
       end if;
-   end Show_Preview;
+   end Render_Preview;
 
    procedure Reset_View is
       V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
    begin
+      Release_Preview;
       Current_Filter := All_Media;
       Update_Filter_Buttons;
       V.Selected_Clip := US.Null_Unbounded_String;

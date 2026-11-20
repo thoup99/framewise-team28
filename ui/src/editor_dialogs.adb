@@ -50,8 +50,8 @@ package body Editor_Dialogs is
             if not Valid_Path (Field (1), "Import Files") then
                return;
             end if;
-            Execute_Line ("import " & US.To_String (Form_Target) & " " & FS.Quote_Path (Field (1)) &
-              " " & Field (2) & " " & Combos.Get_Selected_Text (Kind_Choice));
+            Execute_Line ("import " & US.To_String (Form_Target) & " " &
+              FS.Quote_Path (Field (1)));
          when Add_Track =>
             if Field (1)'Length not in 1 .. Framewise.Max_Name or else
               (for some C of Field (1) => C not in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_')
@@ -90,10 +90,9 @@ package body Editor_Dialogs is
          return;
       end if;
       Form_Target := US.To_Unbounded_String (Unique_Name ("media"));
-      Prepare_Form (Import_Media, "Import Files - enter media duration in seconds");
-      Set_Field (1, "Media file", US.To_String (Files (Files'First)));
-      Set_Field (2, "Duration (seconds)", "");
-      Dialogs.Show (Form);
+      Tell ("Preparing media and detecting duration...");
+      Execute_Line ("import " & US.To_String (Form_Target) & " " &
+        FS.Quote_Path (US.To_String (Files (Files'First))));
    end Import_Selected;
 
    procedure Build is
