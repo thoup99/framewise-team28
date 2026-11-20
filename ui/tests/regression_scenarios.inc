@@ -186,13 +186,13 @@
                end if;
             end Enter_Interval;
          begin
-            Check (Get_Child_Handle (+Timeline_Tools, 9) = Widget_Handle'(+Scroll_Right),
+            Check (Get_Child_Handle (+Timeline_Tools, 10) = Widget_Handle'(+Scroll_Right),
                    "Later remains the last navigation button");
-            Check (Get_Child_Handle (+Timeline_Tools, 11) = Widget_Handle'(+Snap_Interval_Input),
+            Check (Get_Child_Handle (+Timeline_Tools, 12) = Widget_Handle'(+Snap_Interval_Input),
                    "Snap input follows Later and its label");
-            Check (Get_Child_Handle (+Timeline_Tools, 13) = Widget_Handle'(+Cursor_Time_Input),
+            Check (Get_Child_Handle (+Timeline_Tools, 14) = Widget_Handle'(+Cursor_Time_Input),
                    "Timeline cursor field follows the snap section");
-            Check (Labels.Get_Text (Labels.Try_As_Label (Get_Child_Handle (+Timeline_Tools, 12))) =
+            Check (Labels.Get_Text (Labels.Try_As_Label (Get_Child_Handle (+Timeline_Tools, 13))) =
               "Timeline Cursor (s)", "Timeline cursor label");
             Check (Inputs.Get_Text (Snap_Interval_Input) = "0.5" and then
               V.Snap_Interval = Framewise.Timebase / 2, "Default snap interval is half a second");
@@ -375,6 +375,61 @@
          Inputs.Set_Text (Values (3), "0");
          Apply;
          Check (Reply.Ok, "Place selected media");
+         Stage ("source-in thumbnails are queued, cached and drawn without document edits");
+         declare
+            use type Adi.Image.Image_Handle;
+            use type Adi.SDL.Surface.SDL_Surface_Ptr;
+            use type Interfaces.C.int;
+            Seq : constant FS.Sequence_View := Read_Sequence;
+            C renames Seq.Tracks (1).Clips (1);
+            Source : constant String := Framewise.Image (Seq.Sources (C.Src).N);
+            File : constant String := Framewise.Image (Seq.Sources (C.Src).File);
+            Before_History : constant US.Unbounded_String := History;
+            First, Second : Adi.Image.Image_Handle;
+            Found : Boolean := False;
+            V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+         begin
+            Timeline_Thumbnails.Clear;
+            Check (Timeline_Thumbnails.Request (Source, File, C.Src_In) =
+                   Adi.Image.Null_Image_Handle, "First thumbnail request only queues work");
+            Check (Timeline_Thumbnails.Process_One, "Queued thumbnail is decoded");
+            First := Timeline_Thumbnails.Request (Source, File, C.Src_In);
+            Check (Adi.Image.Is_Valid (First), "Real video proxy produces a thumbnail");
+            Check (Adi.Image.Get_Surface (First) /= null and then
+                   Adi.Image.Get_Surface (First).w = 64 and then
+                   Adi.Image.Get_Surface (First).h = 36, "Thumbnail matches clip row height");
+            Check (Timeline_Thumbnails.Request (Source, File, C.Src_In) = First and then
+                   not Timeline_Thumbnails.Process_One, "Repaint reuses cached source/time");
+            V.Build_Items;
+            for I in 1 .. V.Item_Count loop
+               declare
+                  Drawn : constant Item := V.Get_Item (I);
+               begin
+                  if Drawn.Kind = Image_Item and then Drawn.Image_Source = First then
+                     Found := True;
+                     Check (Drawn.Geometry.Height = 36.0, "Thumbnail fills the clip height");
+                  end if;
+               end;
+            end loop;
+            Check (Found, "Timeline draws cached thumbnail");
+            Check (Timeline_Thumbnails.Request (Source, File, C.Src_In + Framewise.Timebase) =
+                   Adi.Image.Null_Image_Handle, "Trimmed source-in queues a different frame");
+            Check (Timeline_Thumbnails.Process_One, "Trimmed thumbnail decodes");
+            Second := Timeline_Thumbnails.Request (Source, File, C.Src_In + Framewise.Timebase);
+            Check (Adi.Image.Is_Valid (Second) and then Second /= First,
+                   "Different source-in has its own image");
+            Timeline_Thumbnails.Clear;
+            Check (not Adi.Image.Is_Valid (First) and then not Adi.Image.Is_Valid (Second),
+                   "Project/proxy invalidation releases thumbnail images");
+            Check (Timeline_Thumbnails.Request ("missing", Test_Dir & "/missing", 0) =
+                   Adi.Image.Null_Image_Handle, "Missing proxy request queues safely");
+            Check (Timeline_Thumbnails.Process_One, "Missing proxy is handled");
+            Check (Timeline_Thumbnails.Request ("missing", Test_Dir & "/missing", 0) =
+                   Adi.Image.Null_Image_Handle and then not Timeline_Thumbnails.Process_One,
+                   "Failed decode is cached instead of retried each repaint");
+            Timeline_Thumbnails.Clear;
+            Check (History = Before_History, "Thumbnails leave history unchanged");
+         end;
          Stage ("scrub motion coalesces preview work and release renders exactly");
          declare
             Before_History : constant US.Unbounded_String := History;

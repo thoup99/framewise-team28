@@ -64,7 +64,10 @@ package body Framewise.Decode is
          Ada.Streams.Stream_IO.Open
            (H.File,
             Ada.Streams.Stream_IO.In_File,
-            File);
+            File,
+            --  Preview and thumbnails may read one proxy simultaneously.
+            --  Keep independent streams and seek positions for each handle.
+            Form => "shared=no");
       exception
          when others =>
             return;

@@ -1,5 +1,6 @@
 with Adi.CSS_Styles; use Adi.CSS_Styles;
 with Timeline_View;
+with Timeline_Thumbnails;
 with Adi.Core; use Adi.Core;
 with Adi.Widget; use Adi.Widget;
 with Adi.Window; use Adi.Window;
@@ -76,6 +77,7 @@ package body Editor_Application is
       end if;
       Editor_Preferences.Save;
       Editor_Timeline_Actions.Release_Preview;
+      Timeline_Thumbnails.Clear;
       Editor_Cursors.Release;
       Menus.Destroy (Clip_Menu);
       Menus.Destroy (File_Menu);

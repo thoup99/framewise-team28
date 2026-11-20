@@ -21,6 +21,8 @@ with Adi.Widget_Styles; use Adi.Widget_Styles;
 with Adi.Window; use Adi.Window;
 with Framewise;
 with Timeline_View;
+with Timeline_Thumbnails;
+with Adi.SDL.Surface;
 with Editor_Split;
 with Adi.Widget.Text_Editor;
 with Adi.SDL.Events;

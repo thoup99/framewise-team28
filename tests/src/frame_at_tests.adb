@@ -17,7 +17,12 @@ procedure Frame_At_Tests is
    Width  : constant Positive := 320;
    Height : constant Positive := 180;
 
+   type Decoder_Access is access Framewise.Decode.Handle;
+   procedure Free_Decoder is new Ada.Unchecked_Deallocation
+     (Framewise.Decode.Handle, Decoder_Access);
+
    H      : Framewise.Decode.Handle;
+   Thumbnail : Decoder_Access;
    Pixels : Framewise.Decode.RGBA_Buffer
      (1 .. Width * Height * 4);
 
@@ -52,6 +57,16 @@ begin
    Check ("proxy opens", Opened);
 
    if Opened then
+      Thumbnail := new Framewise.Decode.Handle;
+      Framewise.Decode.Open (Thumbnail.all, Ada.Command_Line.Argument (1), Ok);
+      Check ("second reader opens the same proxy", Ok);
+      if Ok then
+         Framewise.Decode.Frame_At
+           (Thumbnail.all, Framewise.Timebase / 2, Width, Height, Pixels, Ok);
+         Check ("second reader decodes independently", Ok);
+      end if;
+      Framewise.Decode.Close (Thumbnail.all);
+      Free_Decoder (Thumbnail);
       Framewise.Decode.Frame_At
         (H      => H,
          T      => 0,
