@@ -519,7 +519,11 @@ begin
             History : constant Natural := FS.History_Length (S);
             Grab : constant Pixel_Type := (if Left then 271.0 else 333.0);
             Target : constant Pixel_Type := Grab + Pixel_Type (Delta_Seconds * V.Zoom);
+            Previous_Mode : constant Boolean := V.Standard_Left_Trim;
          begin
+            --  This test checks source-only trimming, which is the
+            --  In-Place mode. Standard mode also moves the clip.
+            V.Standard_Left_Trim := False;
             V.Snap_Interval := Interval;
             Set_Modifiers (Modifiers);
             Timeline_View.On_Mouse_Down (V.Ptr.all, Grab, 50.0, Left_Button);
@@ -540,6 +544,7 @@ begin
             pragma Assert (abs (Clip_Box ("dragged").Width -
               Pixel_Type ((Expected_Out - Expected_In) * V.Zoom)) < 0.01);
             Run ("undo");
+            V.Standard_Left_Trim := Previous_Mode;
          end Trim_By;
       begin
          Trim_By (False, -0.26, 0.0, 1.5, Framewise.Timebase / 2);

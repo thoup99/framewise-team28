@@ -1,3 +1,4 @@
+
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Adi.Core; use Adi.Core;
 with Adi.Widget; use Adi.Widget;
@@ -36,18 +37,44 @@ package body Timeline_View is
       return Raw;
    end Snap_Time;
 
-   --  Trim changes source bounds while retaining the clip's timeline anchor.
-   --  Share this calculation between the drag preview and the released edit.
+   --  Trimming updates source bounds. Standard left trim also changes
+   --  the timeline start so the clip's right edge remains fixed.
+   --  Share this source-bound calculation between ghost and final edit.
    function Trim_Position (W : Track_Widget; X : Pixel_Type) return Long_Float is
       Bound : constant Long_Float :=
         (if W.Drag_Trim_Left then W.Drag_Src_In else W.Drag_Src_Out);
-      Raw : constant Long_Float := Bound + Long_Float (X - W.Drag_Start_X) / W.Zoom;
+      Raw : constant Long_Float :=
+        Bound + Long_Float (X - W.Drag_Start_X) / W.Zoom;
+      Minimum_Step : constant Long_Float :=
+        1.0 / Long_Float (Framewise.Timebase);
+      Snapped : constant Long_Float :=
+        Snap_Time (W, Long_Float'Max (0.0, Raw));
    begin
-      if Raw < 0.0 then
-         return Raw;
+      if W.Drag_Trim_Left then
+         --  Keep at least one frame tick of duration. Standard mode
+         --  cannot extend the left edge before timeline time zero.
+         return Long_Float'Min
+           (W.Drag_Src_Out - Minimum_Step,
+            Long_Float'Max
+              ((if W.Drag_Standard_Left_Trim then
+                  Long_Float'Max
+                    (0.0, W.Drag_Src_In - W.Drag_Start_Time)
+                else 0.0),
+               Snapped));
+      else
+         return Long_Float'Max
+           (W.Drag_Src_In + Minimum_Step,
+            Long_Float'Min
+              (Snapped, Framewise.Seconds (Framewise.Time'Last / 2)));
       end if;
-      return Snap_Time (W, Raw);
    end Trim_Position;
+
+   --  In standard left-trim mode, keep the clip's original end fixed.
+   function Trim_Left_Start (W : Track_Widget; New_In : Long_Float)
+      return Long_Float is
+     (if W.Drag_Standard_Left_Trim then
+         W.Drag_Start_Time + (New_In - W.Drag_Src_In)
+      else W.Drag_Start_Time);
 
    procedure Update_Drag_Modifiers
      (W : in out Track_Widget; Modifiers : Adi.SDL.Events.SDL_Keymod)
@@ -318,9 +345,11 @@ package body Timeline_View is
       Left : constant Pixel_Type := G.X + Gutter;
       Right : constant Pixel_Type := G.X + G.Width;
       Y : Pixel_Type := G.Y + Ruler_Height;
-      Ghost_Visible : Boolean := False;
-      Ghost_Area : Rectangle;
-      Ghost_Name : Unbounded_String;
+      Ghost_Visible   : Boolean := False;
+      Ghost_Area      : Rectangle;
+      Ghost_Name      : Unbounded_String;
+      Target_Visible  : Boolean := False;
+      Target_Area     : Rectangle;
 
       procedure Label (Area : Rectangle; Text : String; Z_Order : Natural := 2) is
          I : Item := Make_Text (Label_Part, Area, Text, Z_Order);
@@ -391,7 +420,7 @@ package body Timeline_View is
                               Pixel_Type'Max
                                  (0.0, Visible_Right - Visible_Left - 6.0),
                                  24.0),
-                                 Framewise.Image (C.N));                     
+                                 Framewise.Image (C.N));
                      end if;
                   --  Use the same timeline-to-ticks mapping as the click
                   --  handler; only show cuts strictly inside the clip.
@@ -434,7 +463,12 @@ package body Timeline_View is
                         if W.Drag_Trim_Left then
                            Preview_In :=
                               Trim_Position (W, W.Drag_Current_X);
-                        
+                           --  For either mode, show the trimmed left edge
+                           --  following the mouse. In-place mode also draws
+                           --  a yellow outline at the final anchored position.
+                           Preview_Start := W.Drag_Start_Time +
+                             (Preview_In - W.Drag_Src_In);
+
                         elsif W.Drag_Trim_Right then
                            Preview_Out :=
                               Trim_Position (W, W.Drag_Current_X);
@@ -445,6 +479,7 @@ package body Timeline_View is
 
                         if Preview_In >= 0.0
                            and then Preview_Out > Preview_In
+                           and then Preview_Start >= 0.0
                         then
                            declare
                               Preview_X1 : constant Long_Float :=
@@ -470,8 +505,28 @@ package body Timeline_View is
                                  Ghost_Area := (Ghost_Left, Y + 4.0, Ghost_Right - Ghost_Left, 36.0);
                                  Ghost_Name := To_Unbounded_String (Framewise.Image (C.N));
                               end if;
+
+                              if W.Drag_Trim_Left and then not W.Drag_Standard_Left_Trim then
+                                 declare
+                                    Anchor_X1 : constant Long_Float :=
+                                      (W.Drag_Start_Time - W.First_Second) * W.Zoom;
+                                    Anchor_X2 : constant Long_Float := Anchor_X1 +
+                                      (Preview_Out - Preview_In) * W.Zoom;
+                                    Target_Left : constant Pixel_Type := Left + Pixel_Type
+                                      (Long_Float'Max (0.0, Anchor_X1));
+                                    Target_Right : constant Pixel_Type := Left + Pixel_Type
+                                      (Long_Float'Min
+                                        (Long_Float (Right - Left), Anchor_X2));
+                                 begin
+                                    if Target_Right > Target_Left then
+                                       Target_Visible := True;
+                                       Target_Area :=
+                                         (Target_Left, Y + 4.0, Target_Right - Target_Left, 36.0);
+                                    end if;
+                                 end;
+                              end if;
                            end;
-                  end if;      
+                  end if;
                   end;
             end if;
             end;
@@ -485,6 +540,25 @@ package body Timeline_View is
             Add_Item (W, Make_Panel (Selected_Part, Ghost_Area, 3));
             Label ((Ghost_Area.X + 3.0, Ghost_Area.Y + 6.0,
               Pixel_Type'Max (0.0, Ghost_Area.Width - 6.0), 24.0), To_String (Ghost_Name), 4);
+         end if;
+         if Target_Visible then
+            --  Cursor_Part has a yellow background. Four narrow panels
+            --  make a hollow, yellow destination outline (not a filled clip).
+            declare
+               A : constant Rectangle := Target_Area;
+               Border_Thickness : constant Pixel_Type :=
+                 Pixel_Type'Min (2.0, A.Width / 2.0);
+            begin
+               Add_Item (W, Make_Panel (Cursor_Part,
+                 (A.X, A.Y, A.Width, 2.0), 6));
+               Add_Item (W, Make_Panel (Cursor_Part,
+                 (A.X, A.Y + A.Height - 2.0, A.Width, 2.0), 6));
+               Add_Item (W, Make_Panel (Cursor_Part,
+                 (A.X, A.Y, Border_Thickness, A.Height), 6));
+               Add_Item (W, Make_Panel (Cursor_Part,
+                 (A.X + A.Width - Border_Thickness, A.Y,
+                  Border_Thickness, A.Height), 6));
+            end;
          end if;
          X := Left + Pixel_Type ((Framewise.Seconds (W.Playhead) - W.First_Second) * W.Zoom);
          if X >= Left and then X < Right then
@@ -640,6 +714,7 @@ package body Timeline_View is
                            W.Drag_Start_Time := Framewise.Seconds (C.Start);
                            W.Drag_Src_In := Framewise.Seconds (C.Src_In);
                            W.Drag_Src_Out := Framewise.Seconds (C.Src_Out);
+                           W.Drag_Standard_Left_Trim := W.Standard_Left_Trim;
 
                            --  First/last 8 pixels act as trim handles.
                            --  A clipped-off edge is not treated as a handle.
@@ -664,7 +739,7 @@ package body Timeline_View is
    end On_Mouse_Down;
 
    overriding procedure On_Mouse_Move
-      (W   : in out Track_widget;
+      (W   : in out Track_Widget;
       X, Y : Pixel_Type)
    is
    begin
@@ -685,7 +760,8 @@ package body Timeline_View is
       Button : Mouse_Button)
    is
       pragma Unreferenced (Y);
-      New_Time : Long_Float;
+      New_Time  : Long_Float;
+      New_Start : Long_Float;
    begin
       if Button = Left_Button and then W.Scrubbing then
          Update_Drag_Modifiers (W, Adi.SDL.Events.SDL_GetModState);
@@ -696,11 +772,11 @@ package body Timeline_View is
       if Button /= Left_Button or else not W.Drag_Active then
          return;
       end if;
-      
+
       Update_Drag_Modifiers (W, Adi.SDL.Events.SDL_GetModState);
       W.Drag_Current_X := X;
       W.Drag_Active := False;
-      Mark_Dirty(W);
+      Mark_Dirty (W);
 
       --  Ignore clicks without meaningful mouse movement.
       if abs (X - W.Drag_Start_X) < 3.0
@@ -711,27 +787,82 @@ package body Timeline_View is
       end if;
 
       if W.Drag_Trim_Left then
-         -- Dragging the left edge changes the source in-point.
-         New_Time :=
-            Trim_Position (W, X);
+         New_Time := Trim_Position (W, X);
+         New_Start := Trim_Left_Start (W, New_Time);
 
-         if New_Time < 0.0
-            or else New_Time >= W.Drag_Src_Out
+         if New_Time < 0.0 or else New_Time >= W.Drag_Src_Out
+           or else New_Start < 0.0
+           or else New_Start > Framewise.Seconds (Framewise.Time'Last / 2)
          then
             return;
          end if;
 
-         W.Submit_Command.all
-            ("trim " & To_String (W.Drag_Name) & " " &
-            Framewise.Session.Image_Time
-               (Framewise.Time
-                  (New_Time * Long_Float (Framewise.Timebase))) &
-            " " &
-            Framewise.Session.Image_Time
-               (Framewise.Time
-                  (W.Drag_Src_Out * Long_Float (Framewise.Timebase))));
+         declare
+            New_In_Ticks : constant Framewise.Time := Framewise.Time
+              (New_Time * Long_Float (Framewise.Timebase));
+            Old_In_Ticks : constant Framewise.Time := Framewise.Time
+              (W.Drag_Src_In * Long_Float (Framewise.Timebase));
+            Old_Start_Ticks : constant Framewise.Time := Framewise.Time
+              (W.Drag_Start_Time * Long_Float (Framewise.Timebase));
+            New_Start_Ticks : Framewise.Time := Old_Start_Ticks;
+            Trim_Line : constant String :=
+              "trim " & To_String (W.Drag_Name) & " " &
+              Framewise.Session.Image_Time (New_In_Ticks) & " " &
+              Framewise.Session.Image_Time
+                (Framewise.Time
+                  (W.Drag_Src_Out * Long_Float (Framewise.Timebase)));
+         begin
+            if W.Drag_Standard_Left_Trim then
+               if New_In_Ticks >= Old_In_Ticks then
+                  if New_In_Ticks - Old_In_Ticks >
+                    Framewise.Time'Last / 2 - Old_Start_Ticks
+                  then
+                     return;
+                  end if;
+                  New_Start_Ticks := Old_Start_Ticks +
+                    (New_In_Ticks - Old_In_Ticks);
+               else
+                  if Old_In_Ticks - New_In_Ticks > Old_Start_Ticks then
+                     return;
+                  end if;
+                  New_Start_Ticks := Old_Start_Ticks -
+                    (Old_In_Ticks - New_In_Ticks);
+               end if;
+
+               declare
+                  Move_Line : constant String :=
+                    "move " & To_String (W.Drag_Name) & " " &
+                    Framewise.Session.Image_Time (New_Start_Ticks);
+               begin
+                  if New_In_Ticks >= Old_In_Ticks then
+                     --  Shrink first, then move to preserve the original end.
+                     W.Submit_Command.all (Trim_Line);
+                     W.Submit_Command.all (Move_Line);
+                  else
+                     --  Shift left before expanding the source window.
+                     W.Submit_Command.all (Move_Line);
+                     W.Submit_Command.all (Trim_Line);
+                  end if;
+               end;
+            else
+               --  In-place trimming keeps the original timeline start.
+               W.Submit_Command.all (Trim_Line);
+            end if;
+         end;
 
       elsif W.Drag_Trim_Right then
+         --  A trim snapped to zero duration must be ignored. The visual
+         --  preview clamps to one tick, but serializing that minimum as
+         --  decimal seconds can round back to zero in the command parser.
+         if Snap_Time
+           (W, Long_Float'Max
+             (0.0, W.Drag_Src_Out +
+               Long_Float (X - W.Drag_Start_X) / W.Zoom))
+             <= W.Drag_Src_In
+         then
+            return;
+         end if;
+
          --  Dragging the right edge changes the source out-point.
          New_Time :=
            Trim_Position (W, X);
