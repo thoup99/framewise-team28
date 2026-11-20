@@ -22,6 +22,7 @@ with Adi.SDL.Pixelformat;
 with Adi.SDL.Surface;
 
 with Framewise.Decode;
+with Timeline_Thumbnails;
 
 package body Editor_Timeline_Actions is
    use type Buttons.Button_Handle;
@@ -150,6 +151,16 @@ package body Editor_Timeline_Actions is
       Width : constant Positive := Positive (Integer'Max (1, Integer (Pixel_Type'Floor (Area.Width))));
       Height : constant Positive := Positive (Integer'Max (1, Integer (Pixel_Type'Floor (Area.Height))));
    begin
+      --  Decode at most one thumbnail per frame, and defer work while scrubbing.
+      declare
+         V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
+      begin
+         if not V.Scrubbing and then not V.Drag_Active and then
+           Timeline_Thumbnails.Process_One
+         then
+            Mark_Dirty (+Tracks);
+         end if;
+      end;
       --  Panel/window resizing changes the canvas even if the playhead is still.
       if Width /= Rendered_Width or else Height /= Rendered_Height then
          declare
@@ -376,6 +387,7 @@ package body Editor_Timeline_Actions is
       V : Timeline_View.Views.Ref := Timeline_View.Views.Borrow (Tracks);
    begin
       Release_Preview;
+      Timeline_Thumbnails.Clear;
       Current_Filter := All_Media;
       Update_Filter_Buttons;
       V.Selected_Clip := US.Null_Unbounded_String;

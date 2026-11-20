@@ -7,6 +7,7 @@ with Framewise;
 with Timeline_View;
 with Editor_Styles; use Editor_Styles;
 with Editor_Console;
+with Timeline_Thumbnails;
 
 package body Editor_Controller is
    use type Buttons.Button_Handle;
@@ -130,6 +131,13 @@ package body Editor_Controller is
       --  and logging so an edit is always recorded exactly once.
       --  Commands can reload a project or replace an existing proxy file.
       Editor_Timeline_Actions.Release_Preview;
+      if Line = "new" or else Ada.Strings.Fixed.Index (Line, "new ") = 1
+        or else Ada.Strings.Fixed.Index (Line, "load ") = 1
+        or else Ada.Strings.Fixed.Index (Line, "proxy ") = 1
+        or else Ada.Strings.Fixed.Index (Line, "import ") = 1
+      then
+         Timeline_Thumbnails.Clear;
+      end if;
       FS.Execute (Editor, Line, Reply);
       Refresh_Timeline;
       if Reply.Ok then

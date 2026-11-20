@@ -4,9 +4,12 @@ with Adi.Core; use Adi.Core;
 with Adi.Widget; use Adi.Widget;
 with Ada.Strings.Fixed;
 with Framewise;
+with Adi.Image;
+with Timeline_Thumbnails;
 
 package body Timeline_View is
    use type Framewise.Time;
+   use all type Framewise.Session.Media_Kind;
    Gutter : constant Pixel_Type := 110.0;
    Ruler_Height : constant Pixel_Type := 30.0;
 
@@ -399,6 +402,8 @@ package body Timeline_View is
                        (Framewise.Seconds (C.Start) - W.First_Second) * W.Zoom;
                      X2 : constant Long_Float := X1 +
                        Framewise.Seconds (C.Src_Out - C.Src_In) * W.Zoom;
+                     Thumb : Adi.Image.Image_Handle := Adi.Image.Null_Image_Handle;
+                     Thumb_Width : Pixel_Type := 0.0;
                      Visible_Left : constant Pixel_Type :=
                        Left + Pixel_Type (Long_Float'Max (0.0, X1));
                      Visible_Right : constant Pixel_Type :=
@@ -409,6 +414,15 @@ package body Timeline_View is
                            (W.Drag_Active
                            and then To_String (W.Drag_Name) = Framewise.Image (C.N))
                      then
+                        if Track.Kind /= Audio and then Seq.Sources (C.Src).Kind /= Audio then
+                           Thumb := Timeline_Thumbnails.Request
+                             (Framewise.Image (Seq.Sources (C.Src).N),
+                              Framewise.Image (Seq.Sources (C.Src).File), C.Src_In);
+                           if Adi.Image.Is_Valid (Thumb) then
+                              Thumb_Width := Pixel_Type'Min
+                                (64.0, Visible_Right - Visible_Left);
+                           end if;
+                        end if;
                         Add_Item (W, Make_Panel
                            ((if To_String (W.Selected_Clip) = Framewise.Image (C.N)
                            then Selected_Part
@@ -416,11 +430,16 @@ package body Timeline_View is
                            (Visible_Left, Y + 4.0,
                            Visible_Right - Visible_Left, 36.0), 1));
 
-                        Label ((Visible_Left + 3.0, Y + 10.0,
+                        Label ((Visible_Left + Thumb_Width + 3.0, Y + 10.0,
                               Pixel_Type'Max
-                                 (0.0, Visible_Right - Visible_Left - 6.0),
+                                 (0.0, Visible_Right - Visible_Left - Thumb_Width - 6.0),
                                  24.0),
                                  Framewise.Image (C.N));
+                        if Thumb_Width > 0.0 then
+                           Add_Item (W, Make_Image (Icon_Part,
+                             (Visible_Left, Y + 4.0 + (36.0 - Thumb_Width * 36.0 / 64.0) / 2.0,
+                              Thumb_Width, Thumb_Width * 36.0 / 64.0), Thumb, 2));
+                        end if;
                      end if;
                   --  Use the same timeline-to-ticks mapping as the click
                   --  handler; only show cuts strictly inside the clip.
